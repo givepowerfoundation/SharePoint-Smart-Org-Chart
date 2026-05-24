@@ -1,0 +1,16 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/core-build/config.schema.json",
+  "version": "2.0",
+  "bundles": {
+    "smart-org-chart-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/smartOrgChart/SmartOrgChartWebPart.js",
+          "manifest": "./src/webparts/smartOrgChart/SmartOrgChartWebPart.manifest.json"
+        }
+      ]
+    }
+  },
+  "externals": {},
+  "localizedResources": {}
+}

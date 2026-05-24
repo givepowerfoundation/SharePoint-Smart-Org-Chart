@@ -1,0 +1,134 @@
+@import '~@microsoft/sp-office-ui-fabric-core/dist/sass/SPFabricCore.scss';
+
+.container {
+  font-family: $ms-font-family-fallbacks;
+  font-size: $ms-font-size-m;
+  color: #201f1e;
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 52px;
+  background: $ms-color-themePrimary;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.brandArea {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.logo {
+  height: 32px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.viewTitle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.companyName {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.brandDivider {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  font-weight: 300;
+}
+
+.viewIcon {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.9);
+  flex-shrink: 0;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.actionBtn {
+  color: rgba(255, 255, 255, 0.8) !important;
+  border-radius: 4px !important;
+
+  i { color: rgba(255, 255, 255, 0.8) !important; }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+    i { color: #ffffff !important; }
+  }
+}
+
+.demoBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 16px;
+  background: #fff4ce;
+  border-bottom: 1px solid #f0cc52;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.demoBannerLabel {
+  font-weight: 600;
+  color: #605e5c;
+  margin-right: 4px;
+}
+
+.demoBannerBtn {
+  padding: 2px 12px;
+  border: 1px solid #8a8886;
+  border-radius: 12px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+  color: #323130;
+  line-height: 20px;
+
+  &:hover { background: #edebe9; }
+}
+
+.demoBannerBtnActive {
+  background: #0078d4;
+  border-color: #0078d4;
+  color: #ffffff;
+  font-weight: 600;
+
+  &:hover { background: #106ebe; }
+}
+
+.content {
+  flex: 1;
+  min-height: 0;   /* critical: lets inner flex children scroll */
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}

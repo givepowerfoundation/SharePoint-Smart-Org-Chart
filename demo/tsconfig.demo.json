@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "jsx": "react",
+    "strict": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "lib": ["es6", "dom", "es2015", "es2016.array.include"],
+    "skipLibCheck": true
+  },
+  "include": ["../src/**/*", "./**/*"]
+}

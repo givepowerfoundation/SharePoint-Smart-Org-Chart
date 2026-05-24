@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# SPFx build output
+dist/
+lib/
+temp/
+release/
+sharepoint/
+
+# Demo tool build output
+demo/dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS metadata
+.DS_Store
+Thumbs.db

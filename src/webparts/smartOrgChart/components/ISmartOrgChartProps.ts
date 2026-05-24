@@ -1,0 +1,21 @@
+import { WebPartContext } from '@microsoft/sp-webpart-base';
+import { ISmartOrgChartWebPartProps } from '../SmartOrgChartWebPart';
+
+export type OrgChartTheme = 'modern' | 'minimal' | 'corporate' | 'dark';
+
+export interface ISmartOrgChartProps extends ISmartOrgChartWebPartProps {
+  context: WebPartContext;
+  onSettingsSaved: (newProps: Partial<ISmartOrgChartWebPartProps>) => void;
+  hideDemoBanner?: boolean;
+}
+
+export interface IUserSettings {
+  alphabetFilterField: 'firstName' | 'lastName';
+  cardSize: 'small' | 'medium' | 'large';
+  showEmail: boolean;
+  showPhone: boolean;
+  showDepartment: boolean;
+  showOffice: boolean;
+  levelsAbove: number;
+  compactCards: boolean;
+}

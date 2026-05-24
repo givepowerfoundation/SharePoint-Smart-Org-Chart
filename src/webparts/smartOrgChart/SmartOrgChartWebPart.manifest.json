@@ -1,0 +1,33 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.schema.json",
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "alias": "SmartOrgChartWebPart",
+  "componentType": "WebPart",
+  "version": "*",
+  "manifestVersion": 2,
+  "requiresCustomScript": false,
+  "supportedHosts": ["SharePointWebPart", "TeamsPersonalApp", "TeamsTab"],
+  "supportsThemeVariants": true,
+  "preconfiguredEntries": [
+    {
+      "groupId": "5c03119e-3074-46fd-976b-c60198311f70",
+      "group": { "default": "Other" },
+      "title": { "default": "Smart Org Chart" },
+      "description": { "default": "Employee Directory and Org Chart powered by Microsoft Graph" },
+      "officeFabricIconFontName": "Org",
+      "properties": {
+        "defaultView": "directory",
+        "alphabetFilterField": "firstName",
+        "topLevelUser": "",
+        "levelsBelow": 3,
+        "levelsAbove": 1,
+        "cardSize": "medium",
+        "showEmail": true,
+        "showPhone": true,
+        "showDepartment": true,
+        "showOffice": true,
+        "pageSize": 50
+      }
+    }
+  ]
+}
