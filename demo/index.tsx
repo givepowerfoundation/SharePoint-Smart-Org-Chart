@@ -16,6 +16,14 @@ const mockSize: MockCompanySize = sizeRaw === '500' ? 500 : sizeRaw === '1000' ?
 try { localStorage.setItem('smartOrgChart_mockSize', String(mockSize)); } catch { /* ignore */ }
 // Force the requested view so readCurrentView() doesn't restore a stale value.
 try { localStorage.setItem('smartOrgChart_currentView', view); } catch { /* ignore */ }
+// Force the requested layout so OrgChart doesn't restore a stale chartLayout from localStorage.
+try {
+  const chartState = JSON.parse(localStorage.getItem('smartOrgChart_chartState') || '{}');
+  chartState.chartLayout = layout;
+  // Clear saved navigation so tree layouts always start from the root.
+  delete chartState.focusEmail;
+  localStorage.setItem('smartOrgChart_chartState', JSON.stringify(chartState));
+} catch { /* ignore */ }
 
 const mockContext = {
   pageContext: {
