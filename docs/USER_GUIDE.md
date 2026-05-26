@@ -119,7 +119,9 @@ The vertical and horizontal tree layouts display the full loaded hierarchy simul
 
 ![Vertical tree org chart showing the full hierarchy from CEO downwards](screenshots/08-orgchart-vertical.png)
 
-![Horizontal tree org chart showing the hierarchy laid out left to right](screenshots/16-orgchart-horizontal.png)
+![Vertical tree org chart showing the hierarchy in left-to-right columns](screenshots/16-orgchart-vertical.png)
+
+![Horizontal tree org chart showing the full hierarchy spreading top-down and wide](screenshots/18-orgchart-horizontal.png)
 
 **Expanding and collapsing:**
 

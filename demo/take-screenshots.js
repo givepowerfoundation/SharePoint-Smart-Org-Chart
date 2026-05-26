@@ -233,9 +233,13 @@ async function clickAndWait(page, selector, ms = 600) {
     );
     console.log('  ✓ 15-themes.png (also saved 15-theme-modern/minimal/corporate/dark.png)');
 
-    // ── 16 Org Chart horizontal tree ─────────────────────────────────────────
+    // ── 16 Org Chart vertical (left-right columns) tree ──────────────────────
     await goAndWait(page, '/?view=orgchart&layout=horizontal', 3000);
-    await screenshot(page, '16-orgchart-horizontal.png');
+    await screenshot(page, '16-orgchart-vertical.png');
+
+    // ── 18 Org Chart horizontal (top-down wide spread) tree ───────────────────
+    await goAndWait(page, '/?view=orgchart&layout=vertical', 3000);
+    await screenshot(page, '18-orgchart-horizontal.png');
 
     // ── 17 Directory list view ────────────────────────────────────────────────
     await goAndWait(page, '/?view=directory');
