@@ -71,6 +71,12 @@ Each card shows the employee's profile photo (or their initials if no photo is a
 
 Click any card to open the [Person Profile Card](#5-person-profile-card).
 
+### List view
+
+Toggle between the card grid and a compact list view using the view buttons above the alphabet bar.
+
+![Employee Directory in list view showing a compact single-row layout per person](screenshots/17-directory-list.png)
+
 ### Card sizes
 
 Three card sizes are available in User Preferences:
@@ -112,6 +118,8 @@ Each card shows the number of direct reports. Cards with no reports open the [Pe
 The vertical and horizontal tree layouts display the full loaded hierarchy simultaneously.
 
 ![Vertical tree org chart showing the full hierarchy from CEO downwards](screenshots/08-orgchart-vertical.png)
+
+![Horizontal tree org chart showing the hierarchy laid out left to right](screenshots/16-orgchart-horizontal.png)
 
 **Expanding and collapsing:**
 

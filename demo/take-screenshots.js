@@ -233,6 +233,20 @@ async function clickAndWait(page, selector, ms = 600) {
     );
     console.log('  ✓ 15-themes.png (also saved 15-theme-modern/minimal/corporate/dark.png)');
 
+    // ── 16 Org Chart horizontal tree ─────────────────────────────────────────
+    await goAndWait(page, '/?view=orgchart&layout=horizontal', 3000);
+    await screenshot(page, '16-orgchart-horizontal.png');
+
+    // ── 17 Directory list view ────────────────────────────────────────────────
+    await goAndWait(page, '/?view=directory');
+    await page.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('button'));
+      const listBtn = btns.find(b => b.title && b.title.toLowerCase().includes('list'));
+      if (listBtn) listBtn.click();
+    });
+    await wait(600);
+    await screenshot(page, '17-directory-list.png');
+
     console.log(`\nAll screenshots saved to ${SHOTS_DIR}`);
 
   } catch (err) {
