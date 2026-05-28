@@ -32,6 +32,8 @@ export interface ISmartOrgChartWebPartProps {
   enableStats: boolean;
   enableDeptFilter: boolean;
   enableUserFilter: boolean;
+  // Data
+  dataSource: 'auto' | 'graph' | 'search';
 }
 
 export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOrgChartWebPartProps> {
@@ -49,6 +51,8 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
     // Branding defaults
     if (p.companyName === undefined) p.companyName = '';
     if (p.logoUrl     === undefined) p.logoUrl     = '';
+    // Data source default
+    if (p.dataSource  === undefined) p.dataSource  = 'auto';
     return super.onInit();
   }
 
@@ -69,6 +73,7 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
       enableStats: this.properties.enableStats !== false,
       enableDeptFilter: this.properties.enableDeptFilter !== false,
       enableUserFilter: this.properties.enableUserFilter !== false,
+      dataSource: this.properties.dataSource || 'auto',
       onSettingsSaved: (newProps: Partial<ISmartOrgChartWebPartProps>) => {
         Object.assign(this.properties, newProps);
       }
@@ -144,6 +149,34 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
                     { key: 'horizontal', text: 'Horizontal Tree',           iconProps: { officeFabricIconFontName: 'ArrowDownRight' } },
                   ]
                 }),
+              ]
+            },
+            {
+              groupName: 'Data Source',
+              groupFields: [
+                PropertyPaneChoiceGroup('dataSource', {
+                  label: 'Where to load user & org data from',
+                  options: [
+                    {
+                      key: 'auto',
+                      text: 'Auto — Graph API, fall back to SharePoint Search',
+                      iconProps: { officeFabricIconFontName: 'AutoEnhanceOn' }
+                    },
+                    {
+                      key: 'graph',
+                      text: 'Graph API — live Azure AD data (no indexing delay)',
+                      iconProps: { officeFabricIconFontName: 'AzureLogo' }
+                    },
+                    {
+                      key: 'search',
+                      text: 'SharePoint Search — legacy behavior',
+                      iconProps: { officeFabricIconFontName: 'Search' }
+                    }
+                  ]
+                }),
+                PropertyPaneLabel('dataSource', {
+                  text: 'Graph API is recommended. It reads directly from Azure Active Directory so new users and manager changes appear immediately. Requires Microsoft Graph permissions to be approved in the SharePoint App Catalog.'
+                })
               ]
             },
             {

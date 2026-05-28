@@ -30,10 +30,13 @@ const SELECT_PROPS   = 'AccountName,DisplayName,PreferredName,JobTitle,Departmen
                        'WorkEmail,WorkPhone,MobilePhone,OfficeNumber,PictureURL,Manager';
 const BATCH_SIZE = 500;
 
+export type DataSource = 'auto' | 'graph' | 'search';
+
 export class GraphService {
   private _client:         SPHttpClient;
   private _graphClient:    MSGraphClientV3 | undefined;
   private _webUrl:         string;
+  private _dataSource:     DataSource;
   private _photoCache:     Map<string, string | null> = new Map();
   private _allUsersCache:  IGraphUser[] | null = null;
   private _childrenMap:    Map<string, IGraphUser[]> = new Map();
@@ -45,10 +48,11 @@ export class GraphService {
   private _presenceExpiry = 0;
   private readonly _PRESENCE_TTL = 60_000;
 
-  constructor(client: SPHttpClient, webUrl: string, graphClient?: MSGraphClientV3) {
+  constructor(client: SPHttpClient, webUrl: string, graphClient?: MSGraphClientV3, dataSource: DataSource = 'auto') {
     this._client      = client;
     this._webUrl      = webUrl.replace(/\/$/, '');
     this._graphClient = graphClient;
+    this._dataSource  = dataSource;
   }
 
   /* ── Public API ──────────────────────────────────────────────────── */
@@ -57,8 +61,7 @@ export class GraphService {
     if (this._allUsersCache) return Promise.resolve(this._allUsersCache);
     if (this._loadingPromise) return this._loadingPromise;
 
-    this._loadingPromise = this._fetchAllUsers()
-      .then(users => this._supplementUnlicensedReports(users))
+    this._loadingPromise = this._loadUsers()
       .then(users => {
         this._allUsersCache = users;
         this._buildMaps(users);
@@ -71,6 +74,35 @@ export class GraphService {
       });
 
     return this._loadingPromise;
+  }
+
+  private async _loadUsers(): Promise<IGraphUser[]> {
+    const useGraph = this._dataSource === 'graph' ||
+                     (this._dataSource === 'auto' && !!this._graphClient);
+
+    if (this._dataSource === 'graph' && !this._graphClient) {
+      throw new Error(
+        'Graph API data source selected but Microsoft Graph permissions have not been granted. ' +
+        'Please approve the app permissions in the SharePoint App Catalog, or switch the Data Source setting to "SharePoint Search".'
+      );
+    }
+
+    if (useGraph) {
+      try {
+        const users = await this._fetchAllUsersFromGraph();
+        if (users.length === 0) throw new Error('Graph API returned 0 users');
+        return users;
+      } catch (err) {
+        if (this._dataSource === 'graph') throw err;
+        // 'auto' mode: fall back to SharePoint Search
+        console.warn('[SmartOrgChart] Graph API unavailable, falling back to SharePoint Search:', err);
+        this._pendingManagerIds.clear();
+      }
+    }
+
+    // SharePoint Search path (primary or fallback)
+    const users = await this._fetchAllUsers();
+    return this._supplementUnlicensedReports(users);
   }
 
   public async getUserPhoto(userId: string): Promise<string | null> {
@@ -287,6 +319,72 @@ export class GraphService {
     return newUsers.length > 0
       ? [...users, ...newUsers].sort((a, b) => a.displayName.localeCompare(b.displayName))
       : users;
+  }
+
+  private async _fetchAllUsersFromGraph(): Promise<IGraphUser[]> {
+    if (!this._graphClient) throw new Error('Graph client not available');
+
+    const users: IGraphUser[] = [];
+    const SELECT = 'id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones';
+    let url: string | null =
+      `/users?$select=${SELECT}&$expand=manager($select=id,userPrincipalName,mail)&$top=999`;
+
+    while (url) {
+      const req = this._graphClient.api(url);
+      if (!url.startsWith('https://')) req.version('v1.0');
+      const response = await req.get();
+      const items: Array<{
+        id: string;
+        displayName: string;
+        mail: string;
+        userPrincipalName: string;
+        jobTitle: string;
+        department: string;
+        officeLocation: string;
+        mobilePhone: string;
+        businessPhones: string[];
+        manager?: { id: string; userPrincipalName: string; mail: string };
+      }> = response?.value || [];
+
+      for (const item of items) {
+        const upn  = (item.userPrincipalName || '').toLowerCase();
+        const mail = (item.mail || '').toLowerCase();
+        const id   = upn || mail;
+        if (!id || !item.displayName) continue;
+
+        // Pre-populate photo cache with SharePoint profile photo URL
+        const photoEmail = mail || upn;
+        const photoUrl = photoEmail
+          ? `${this._webUrl}/_layouts/15/userphoto.aspx?size=L&accountname=${encodeURIComponent(photoEmail)}`
+          : null;
+        this._photoCache.set(id, photoUrl);
+
+        // Store AAD object ID for presence lookups
+        if (item.id) this._upnToObjectId.set(id, item.id);
+
+        // Manager relationship — prefer UPN, fall back to mail
+        const mgrUpn  = (item.manager?.userPrincipalName || '').toLowerCase();
+        const mgrMail = (item.manager?.mail || '').toLowerCase();
+        const mgrId   = mgrUpn || mgrMail;
+        if (mgrId) this._pendingManagerIds.set(id, mgrId);
+
+        users.push({
+          id,
+          displayName:       item.displayName,
+          mail:              mail,
+          jobTitle:          item.jobTitle          || '',
+          mobilePhone:       item.mobilePhone        || '',
+          businessPhones:    item.businessPhones     || [],
+          department:        item.department         || '',
+          officeLocation:    item.officeLocation     || '',
+          userPrincipalName: upn,
+        });
+      }
+
+      url = response?.['@odata.nextLink'] || null;
+    }
+
+    return users.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
   }
 
   private async _fetchAllUsers(): Promise<IGraphUser[]> {

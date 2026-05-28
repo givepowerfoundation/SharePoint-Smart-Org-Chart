@@ -91,7 +91,7 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
   }
 
   public async componentDidUpdate(prev: ISmartOrgChartProps): Promise<void> {
-    if (prev.useDemoData !== this.props.useDemoData) {
+    if (prev.useDemoData !== this.props.useDemoData || prev.dataSource !== this.props.dataSource) {
       await this._initGraphService();
     }
   }
@@ -112,7 +112,7 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
     } catch {
       // Graph client unavailable — fall back to SP Search only
     }
-    this.setState({ graphService: new GraphService(spHttpClient, pageContext.web.absoluteUrl, graphClient) });
+    this.setState({ graphService: new GraphService(spHttpClient, pageContext.web.absoluteUrl, graphClient, this.props.dataSource || 'auto') });
   }
 
   private _setMockSize = (size: MockCompanySize): void => {
