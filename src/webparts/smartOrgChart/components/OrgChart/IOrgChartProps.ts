@@ -9,6 +9,7 @@ export interface IOrgChartProps {
   showEmail: boolean;
   showPhone: boolean;
   showDepartment: boolean;
+  showOffice: boolean;
   theme: OrgChartTheme;
   currentUserEmail: string;
   compactCards: boolean;

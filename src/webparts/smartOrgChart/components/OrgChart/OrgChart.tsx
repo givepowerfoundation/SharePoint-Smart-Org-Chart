@@ -379,6 +379,7 @@ interface IOrgNodeCardProps {
   photos: { [id: string]: string | null };
   presenceMap: Map<string, PresenceAvailability>;
   showDepartment: boolean;
+  showOffice: boolean;
   isExpanding: boolean;
   searchQuery: string;
   theme: OrgChartTheme;
@@ -392,7 +393,7 @@ interface IOrgNodeCardProps {
 }
 
 const OrgNodeCard: React.FC<IOrgNodeCardProps> = ({
-  node, photos, presenceMap, showDepartment, isExpanding,
+  node, photos, presenceMap, showDepartment, showOffice, isExpanding,
   searchQuery, theme, directReportCount, subtreeCount, managerUser,
   compactCards, onToggle, onCardClick, onFocus
 }) => {
@@ -451,6 +452,12 @@ const OrgNodeCard: React.FC<IOrgNodeCardProps> = ({
       {showDepartment && user.department && !isGuest && !isDisabled && (
         <div className={styles.nodeDept}>{user.department}</div>
       )}
+      {showOffice && user.officeLocation && !isGuest && !isDisabled && (
+        <div className={styles.nodeOffice}>
+          <Icon iconName="POI" className={styles.nodeOfficeIcon} />
+          {user.officeLocation}
+        </div>
+      )}
       {!showDepartment && managerUser && !isGuest && !isDisabled && (
         <div className={styles.managerLine} style={{ color: isDark ? '#8090b0' : '#999' }}>
           ↑ {managerUser.displayName.split(' ')[0]}
@@ -488,11 +495,15 @@ const OrgNodeCard: React.FC<IOrgNodeCardProps> = ({
 
 /* ── Recursive tree ──────────────────────── */
 
+const MULTI_COL_THRESHOLD = 8;
+
 interface IOrgTreeProps {
   node: IOrgNode;
   photos: { [id: string]: string | null };
   presenceMap: Map<string, PresenceAvailability>;
   showDepartment: boolean;
+  showOffice: boolean;
+  chartLayout: ChartLayout;
   expandingNodes: Set<string>;
   searchQuery: string;
   theme: OrgChartTheme;
@@ -505,14 +516,27 @@ interface IOrgTreeProps {
 }
 
 const OrgTree: React.FC<IOrgTreeProps> = ({
-  node, photos, presenceMap, showDepartment, expandingNodes,
-  searchQuery, theme, isVisible, parentUser, compactCards, onToggle, onCardClick, onFocus
+  node, photos, presenceMap, showDepartment, showOffice, chartLayout,
+  expandingNodes, searchQuery, theme, isVisible, parentUser, compactCards,
+  onToggle, onCardClick, onFocus
 }) => {
   if (!isVisible(node.user)) return null;
 
   const visibleReports     = node.directReports.filter(c => isVisible(c.user));
   const hasVisibleChildren = node.isExpanded && visibleReports.length > 0;
   const subtreeCount       = getSubtreeCount(node);
+  const useMultiCol        = visibleReports.length >= MULTI_COL_THRESHOLD;
+  const halfCount          = Math.ceil(visibleReports.length / 2);
+
+  const multiColStyle: React.CSSProperties | undefined = useMultiCol
+    ? (chartLayout === 'horizontal'
+        ? { gridTemplateRows: `repeat(${halfCount}, auto)` }
+        : { maxWidth: `${halfCount * 220}px` })
+    : undefined;
+
+  const childrenClass = useMultiCol
+    ? `${styles.children} ${styles.childrenMultiCol}`
+    : styles.children;
 
   return (
     <div className={`${styles.nodeWrapper} ${hasVisibleChildren ? styles.hasChildren : ''}`}>
@@ -521,6 +545,7 @@ const OrgTree: React.FC<IOrgTreeProps> = ({
         photos={photos}
         presenceMap={presenceMap}
         showDepartment={showDepartment}
+        showOffice={showOffice}
         isExpanding={expandingNodes.has(node.user.id)}
         searchQuery={searchQuery}
         theme={theme}
@@ -533,7 +558,7 @@ const OrgTree: React.FC<IOrgTreeProps> = ({
         onFocus={onFocus}
       />
       {hasVisibleChildren && (
-        <div className={styles.children}>
+        <div className={childrenClass} style={multiColStyle}>
           {visibleReports.map(child => (
             <OrgTree
               key={child.user.id}
@@ -541,6 +566,8 @@ const OrgTree: React.FC<IOrgTreeProps> = ({
               photos={photos}
               presenceMap={presenceMap}
               showDepartment={showDepartment}
+              showOffice={showOffice}
+              chartLayout={chartLayout}
               expandingNodes={expandingNodes}
               searchQuery={searchQuery}
               theme={theme}
@@ -1311,6 +1338,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
                       photos={photos}
                       presenceMap={presenceMap}
                       showDepartment={showDepartment}
+                      showOffice={this.props.showOffice}
                       isExpanding={drillLoadingId === report.id}
                       searchQuery=""
                       theme={theme}
@@ -1680,6 +1708,8 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
                 photos={photos}
                 presenceMap={presenceMap}
                 showDepartment={showDepartment}
+                showOffice={this.props.showOffice}
+                chartLayout={chartLayout}
                 expandingNodes={expandingNodes}
                 searchQuery={lowerQ}
                 theme={theme}

@@ -294,6 +294,7 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
               showEmail={userSettings.showEmail}
               showPhone={userSettings.showPhone}
               showDepartment={userSettings.showDepartment}
+              showOffice={userSettings.showOffice}
               theme={theme}
               currentUserEmail={this.props.context?.pageContext?.user?.email || ''}
               compactCards={userSettings.compactCards}
