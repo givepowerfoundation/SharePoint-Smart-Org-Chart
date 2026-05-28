@@ -32,11 +32,19 @@ const BATCH_SIZE = 500;
 
 export type DataSource = 'auto' | 'graph' | 'search';
 
+export interface IUserFilterOptions {
+  tenantDomain?: string;       // only show users whose email domain matches (e.g. 'contoso.com')
+  excludedPatterns?: string[]; // lower-case substrings — hide any user whose name/UPN/mail contains one
+  hideGuestUsers?: boolean;    // hide userType === 'Guest'
+  hideDisabledAccounts?: boolean; // hide accountEnabled === false
+}
+
 export class GraphService {
   private _client:         SPHttpClient;
   private _graphClient:    MSGraphClientV3 | undefined;
   private _webUrl:         string;
   private _dataSource:     DataSource;
+  private _filterOptions:  IUserFilterOptions;
   private _photoCache:     Map<string, string | null> = new Map();
   private _allUsersCache:  IGraphUser[] | null = null;
   private _childrenMap:    Map<string, IGraphUser[]> = new Map();
@@ -48,11 +56,18 @@ export class GraphService {
   private _presenceExpiry = 0;
   private readonly _PRESENCE_TTL = 60_000;
 
-  constructor(client: SPHttpClient, webUrl: string, graphClient?: MSGraphClientV3, dataSource: DataSource = 'auto') {
-    this._client      = client;
-    this._webUrl      = webUrl.replace(/\/$/, '');
-    this._graphClient = graphClient;
-    this._dataSource  = dataSource;
+  constructor(
+    client: SPHttpClient,
+    webUrl: string,
+    graphClient?: MSGraphClientV3,
+    dataSource: DataSource = 'auto',
+    filterOptions: IUserFilterOptions = {}
+  ) {
+    this._client        = client;
+    this._webUrl        = webUrl.replace(/\/$/, '');
+    this._graphClient   = graphClient;
+    this._dataSource    = dataSource;
+    this._filterOptions = filterOptions;
   }
 
   /* ── Public API ──────────────────────────────────────────────────── */
@@ -91,7 +106,7 @@ export class GraphService {
       try {
         const users = await this._fetchAllUsersFromGraph();
         if (users.length === 0) throw new Error('Graph API returned 0 users');
-        return users;
+        return this._applyUserFilters(users);
       } catch (err) {
         if (this._dataSource === 'graph') throw err;
         // 'auto' mode: fall back to SharePoint Search
@@ -102,7 +117,32 @@ export class GraphService {
 
     // SharePoint Search path (primary or fallback)
     const users = await this._fetchAllUsers();
-    return this._supplementUnlicensedReports(users);
+    return this._applyUserFilters(await this._supplementUnlicensedReports(users));
+  }
+
+  private _applyUserFilters(users: IGraphUser[]): IGraphUser[] {
+    const { tenantDomain, excludedPatterns, hideGuestUsers, hideDisabledAccounts } = this._filterOptions;
+    if (!tenantDomain && (!excludedPatterns || excludedPatterns.length === 0) && !hideGuestUsers && !hideDisabledAccounts) {
+      return users;
+    }
+    return users.filter(user => {
+      if (hideDisabledAccounts && user.accountEnabled === false) return false;
+      if (hideGuestUsers && user.userType === 'Guest') return false;
+      if (tenantDomain) {
+        const emailDomain = ((user.mail || user.id || '').split('@')[1] || '').toLowerCase();
+        if (emailDomain && emailDomain !== tenantDomain) return false;
+      }
+      if (excludedPatterns && excludedPatterns.length > 0) {
+        const haystack = [
+          user.displayName || '',
+          user.id || '',
+          user.mail || '',
+          user.userPrincipalName || '',
+        ].join('\0').toLowerCase();
+        if (excludedPatterns.some(p => haystack.includes(p))) return false;
+      }
+      return true;
+    });
   }
 
   public async getUserPhoto(userId: string): Promise<string | null> {

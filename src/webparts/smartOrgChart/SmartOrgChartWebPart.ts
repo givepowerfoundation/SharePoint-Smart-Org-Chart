@@ -34,6 +34,11 @@ export interface ISmartOrgChartWebPartProps {
   enableUserFilter: boolean;
   // Data
   dataSource: 'auto' | 'graph' | 'search';
+  // User filters
+  excludedAccounts: string;
+  restrictToTenantDomain: boolean;
+  hideGuestUsers: boolean;
+  hideDisabledAccounts: boolean;
 }
 
 export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOrgChartWebPartProps> {
@@ -53,6 +58,11 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
     if (p.logoUrl     === undefined) p.logoUrl     = '';
     // Data source default
     if (p.dataSource  === undefined) p.dataSource  = 'auto';
+    // User filter defaults
+    if (p.excludedAccounts       === undefined) p.excludedAccounts       = '';
+    if (p.restrictToTenantDomain === undefined) p.restrictToTenantDomain = false;
+    if (p.hideGuestUsers         === undefined) p.hideGuestUsers         = false;
+    if (p.hideDisabledAccounts   === undefined) p.hideDisabledAccounts   = false;
     return super.onInit();
   }
 
@@ -74,6 +84,10 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
       enableDeptFilter: this.properties.enableDeptFilter !== false,
       enableUserFilter: this.properties.enableUserFilter !== false,
       dataSource: this.properties.dataSource || 'auto',
+      excludedAccounts:       this.properties.excludedAccounts       || '',
+      restrictToTenantDomain: this.properties.restrictToTenantDomain || false,
+      hideGuestUsers:         this.properties.hideGuestUsers         || false,
+      hideDisabledAccounts:   this.properties.hideDisabledAccounts   || false,
       onSettingsSaved: (newProps: Partial<ISmartOrgChartWebPartProps>) => {
         Object.assign(this.properties, newProps);
       }
@@ -177,6 +191,33 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
                 PropertyPaneLabel('dataSource', {
                   text: 'Graph API is recommended. It reads directly from Azure Active Directory so new users and manager changes appear immediately. Requires Microsoft Graph permissions to be approved in the SharePoint App Catalog.'
                 })
+              ]
+            },
+            {
+              groupName: 'User Filters',
+              groupFields: [
+                PropertyPaneTextField('excludedAccounts', {
+                  label: 'Exclude accounts',
+                  placeholder: 'conf-room, noreply, admin@, Service Account',
+                  description: 'Comma-separated words or patterns (case-insensitive). Any user whose display name, email, or UPN contains one of these will be hidden from all views.',
+                  multiline: true,
+                  rows: 3
+                }),
+                PropertyPaneToggle('restrictToTenantDomain', {
+                  label: 'Only show tenant users',
+                  onText: 'On — hides accounts with external email domains (e.g. gmail.com, hotmail.com)',
+                  offText: 'Off — all users shown regardless of email domain'
+                }),
+                PropertyPaneToggle('hideGuestUsers', {
+                  label: 'Hide Azure AD guest accounts',
+                  onText: 'On — guest accounts hidden',
+                  offText: 'Off — guest accounts visible (shown with Guest badge)'
+                }),
+                PropertyPaneToggle('hideDisabledAccounts', {
+                  label: 'Hide disabled accounts',
+                  onText: 'On — blocked sign-in accounts hidden',
+                  offText: 'Off — disabled accounts visible (shown with Disabled badge)'
+                }),
               ]
             },
             {

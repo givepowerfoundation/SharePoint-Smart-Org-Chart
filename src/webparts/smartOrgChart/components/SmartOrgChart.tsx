@@ -2,7 +2,7 @@ import * as React from 'react';
 import { IconButton } from '@fluentui/react/lib/Button';
 import { Icon } from '@fluentui/react/lib/Icon';
 import { MSGraphClientV3 } from '@microsoft/sp-http';
-import { GraphService } from '../../../services/GraphService';
+import { GraphService, IUserFilterOptions } from '../../../services/GraphService';
 import { MockGraphService, MockCompanySize } from '../../../services/MockGraphService';
 import { ISmartOrgChartProps, IUserSettings } from './ISmartOrgChartProps';
 import { EmployeeDirectory } from './EmployeeDirectory/EmployeeDirectory';
@@ -91,7 +91,14 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
   }
 
   public async componentDidUpdate(prev: ISmartOrgChartProps): Promise<void> {
-    if (prev.useDemoData !== this.props.useDemoData || prev.dataSource !== this.props.dataSource) {
+    if (
+      prev.useDemoData           !== this.props.useDemoData ||
+      prev.dataSource            !== this.props.dataSource  ||
+      prev.excludedAccounts      !== this.props.excludedAccounts ||
+      prev.hideDisabledAccounts  !== this.props.hideDisabledAccounts ||
+      prev.hideGuestUsers        !== this.props.hideGuestUsers ||
+      prev.restrictToTenantDomain !== this.props.restrictToTenantDomain
+    ) {
       await this._initGraphService();
     }
   }
@@ -112,7 +119,34 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
     } catch {
       // Graph client unavailable — fall back to SP Search only
     }
-    this.setState({ graphService: new GraphService(spHttpClient, pageContext.web.absoluteUrl, graphClient, this.props.dataSource || 'auto') });
+
+    // Derive tenant domain from the current user's email when the restriction is enabled
+    let tenantDomain: string | undefined;
+    if (this.props.restrictToTenantDomain) {
+      const userEmail = (pageContext.user?.email || '').toLowerCase();
+      const atIdx = userEmail.lastIndexOf('@');
+      if (atIdx > 0) tenantDomain = userEmail.substring(atIdx + 1);
+    }
+
+    const filterOptions: IUserFilterOptions = {
+      tenantDomain,
+      excludedPatterns: (this.props.excludedAccounts || '')
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(s => s.length > 0),
+      hideGuestUsers:       this.props.hideGuestUsers       || false,
+      hideDisabledAccounts: this.props.hideDisabledAccounts || false,
+    };
+
+    this.setState({
+      graphService: new GraphService(
+        spHttpClient,
+        pageContext.web.absoluteUrl,
+        graphClient,
+        this.props.dataSource || 'auto',
+        filterOptions
+      )
+    });
   }
 
   private _setMockSize = (size: MockCompanySize): void => {
