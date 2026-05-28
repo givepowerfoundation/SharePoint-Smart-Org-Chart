@@ -1,6 +1,6 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.schema.json",
-  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "id": "6cf9364a-02fb-4303-947a-24e6e4fbf993",
   "alias": "SmartOrgChartWebPart",
   "componentType": "WebPart",
   "version": "*",

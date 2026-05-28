@@ -2,26 +2,25 @@
   "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
   "solution": {
     "name": "SharePoint Smart Org Chart",
-    "id": "7f3b5d8a-2c4e-4f9a-b1d6-8e3c7a2f5b9d",
+    "id": "9804d69d-05f8-4ed2-970f-63e1db0613f6",
     "version": "1.0.0.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
     "isDomainIsolated": false,
     "developer": {
-      "name": "",
+      "name": "Vivity Consulting",
       "websiteUrl": "",
       "privacyUrl": "",
       "termsOfUseUrl": "",
-      "mpnId": "Undefined-1.18.2"
+      "mpnId": ""
     },
     "metadata": {
-      "shortDescription": { "default": "Employee Directory and Org Chart powered by Microsoft Graph" },
+      "shortDescription": { "default": "Employee Directory and Org Chart" },
       "longDescription": { "default": "A SharePoint web part that provides a searchable Employee Directory and interactive Org Chart, built on Microsoft Graph." },
       "screenshotPaths": [],
       "videoUrl": "",
       "categories": []
     },
-    "features": [],
     "webApiPermissionRequests": [
       {
         "resource": "Microsoft Graph",

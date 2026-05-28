@@ -1,0 +1,58 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build .sppkg
+        run: npm run package
+
+      - name: Get solution version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./config/package-solution.json').solution.version")
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Delete existing release (if version already exists)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "${{ steps.version.outputs.tag }}" --yes 2>/dev/null || true
+          git push origin --delete "${{ steps.version.outputs.tag }}" 2>/dev/null || true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            sharepoint/solution/smart-org-chart.sppkg \
+            --title "Smart Org Chart ${{ steps.version.outputs.tag }}" \
+            --notes "## Installation
+
+          1. Download \`smart-org-chart.sppkg\`
+          2. Upload to your SharePoint App Catalog
+          3. Deploy tenant-wide or to specific sites
+          4. Grant the required Microsoft Graph API permissions in the SharePoint Admin Center
+
+          **Built from:** \`${{ github.sha }}\`" \
+            --latest
