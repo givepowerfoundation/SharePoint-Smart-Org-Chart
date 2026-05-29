@@ -128,6 +128,8 @@ The vertical and horizontal tree layouts display the full loaded hierarchy simul
 - Click the **chevron button** at the bottom of a card to expand or collapse that branch.
 - Use **Expand All** / **Collapse All** in the toolbar to expand or collapse every node at once.
 
+**Wide teams:** When a manager has 8 or more direct reports, the chart automatically arranges their cards into two rows (vertical layout) or two columns (horizontal layout) instead of one long line. This keeps the chart readable without needing to zoom out.
+
 **Panning:** Click and drag anywhere on the chart canvas to scroll.
 
 **Zooming:** Use the **+** / **−** buttons in the toolbar (bottom-right) or the reset button to return to 100%. The chart auto-fits on load.
@@ -193,11 +195,13 @@ Click the **gear icon** in the header bar to open the Preferences panel. All set
 
 ### Cards & Fields
 
+These toggles control what appears on employee cards in **both** the Employee Directory and the Org Chart node cards.
+
 | Setting | Default | Description |
 |---|---|---|
 | **Email address** | On | Show the email address on each card |
 | **Phone number** | On | Show the phone number on each card |
-| **Department** | On | Show the department on each card |
+| **Department** | On | Show the department badge on each card |
 | **Office location** | On | Show the office location on each card |
 
 ### Org Chart
@@ -254,6 +258,31 @@ Open the SharePoint property pane (**Edit** → click the web part → pencil ic
 |---|---|---|
 | **Chart Theme** | Modern, Minimal, Corporate, Dark | Colour scheme for employee cards and the org chart |
 | **Default Org Chart Layout** | Drill-Down, Vertical, Horizontal | The layout shown when a user opens the chart for the first time. Their choice is remembered after that. |
+
+### Data Source
+
+Controls where user and org data is loaded from.
+
+| Option | Description |
+|---|---|
+| **Auto** (default) | Tries Microsoft Graph first; falls back to SharePoint Search if Graph is unavailable. Recommended for most tenants. |
+| **Graph API** | Always reads directly from Azure Active Directory. New users and manager changes appear immediately — no indexing delay. |
+| **SharePoint Search** | Uses the SharePoint People Search index. Changes can take hours to appear. Provided for backwards compatibility. |
+
+> **Graph API is strongly recommended.** It is real-time and ensures that new starters, leavers, and reporting-line changes are reflected immediately.
+
+### User Filters
+
+These filters are applied globally — hidden users do not appear in the directory, the org chart, stats, or search results.
+
+| Setting | Default | Description |
+|---|---|---|
+| **Exclude accounts** | _(empty)_ | Comma-separated words or patterns (case-insensitive). Any user whose display name, email, or UPN contains one of these is hidden. Useful for removing conference rooms (`conf-room`), shared mailboxes (`noreply`), or service accounts (`svc-`). |
+| **Only show tenant users** | Off | When on, hides accounts whose email domain does not match your organisation's domain. Removes external gmail.com, hotmail.com, and other personal email accounts. |
+| **Hide Azure AD guest accounts** | **On** | Hides B2B guest accounts (users from other organisations invited to your tenant). |
+| **Hide disabled accounts** | **On** | Hides accounts with blocked sign-in — typically former employees or deactivated service accounts. Requires the Graph API data source. |
+
+> The "Hide disabled accounts" and "Hide guest accounts" filters are **on by default** for new web part instances.
 
 ### Org Chart
 

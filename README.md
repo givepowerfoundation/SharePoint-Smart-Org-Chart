@@ -20,13 +20,16 @@ A SharePoint Framework (SPFx) web part that provides a searchable **Employee Dir
 | **Org Chart** | Hierarchical tree built from the Azure AD `manager` field |
 | **Three chart layouts** | Drill-down, vertical tree, and horizontal tree |
 | **Lazy expand** | Child nodes are fetched on demand when you expand them |
+| **Wide-org wrapping** | When a manager has 8+ direct reports the children automatically wrap into 2 rows/columns, keeping the chart readable without zooming |
 | **Department & user filters** | Narrow the chart to specific departments or hide guests/members |
+| **User account filters** | Admin-controlled: hide disabled accounts, hide guests, restrict to tenant domain, exclude by name pattern |
 | **Statistics panel** | Headcount by department, overlaid on the chart |
-| **User preferences** | Per-user settings saved to `localStorage` (card size, sort order, visible fields, etc.) |
+| **User preferences** | Per-user settings saved to `localStorage` (card size, sort order, visible fields, compact mode, etc.) |
 | **Photo support** | Profile photos from Graph with base64 caching; initials avatar fallback |
 | **Export** | Download the current view as a PDF or PNG |
 | **Demo mode** | Built-in mock data (150 / 500 / 1,000 people) for testing without Graph permissions |
 | **Themes** | Modern, Minimal, Corporate, and Dark |
+| **Configurable data source** | Graph API (live, no indexing delay), SharePoint Search, or Auto (Graph with SP Search fallback) |
 
 ---
 
@@ -143,27 +146,73 @@ You can also run the demo server manually and open it in a browser (see `demo/` 
 
 ### Property Pane (admin, per web part)
 
+**General**
+
 | Setting | Description |
 |---|---|
-| Default view | Which view opens first — Directory or Org Chart |
-| Top-Level User | Root of the org chart (UPN or email) |
-| Company name | Displayed in the header |
-| Company logo URL | Full URL to a PNG/SVG/JPG (e.g. `https://contoso.sharepoint.com/sites/mysite/SiteAssets/logo.png`) |
-| Levels to load | How many levels below root to fetch (1–8) |
-| Manager levels shown | How many levels above a focused user to show (0–5) |
-| Card size | Small / Medium / Large |
-| Directory page size | How many people per page (10–200) |
 | Use demo data | Renders with built-in mock people instead of Graph |
+| Default view | Which view opens first — Directory or Org Chart |
+
+**Branding**
+
+| Setting | Description |
+|---|---|
+| App title | Text shown in the header alongside the current view name |
+| Logo URL | Full URL to a PNG/SVG/JPG (e.g. `https://contoso.sharepoint.com/sites/mysite/SiteAssets/logo.png`) |
+
+**Visual Style**
+
+| Setting | Description |
+|---|---|
+| Chart theme | Modern, Minimal, Corporate, or Dark |
+| Default layout | Drill-Down, Vertical, or Horizontal |
+
+**Data Source**
+
+| Option | Description |
+|---|---|
+| Auto (default) | Tries Graph API first; falls back to SharePoint Search if Graph is unavailable |
+| Graph API | Always reads live Azure AD data — no indexing delay; recommended |
+| SharePoint Search | Legacy behavior using the People Search index |
+
+> Graph API is strongly recommended. New users and manager changes appear immediately without waiting for the SharePoint search index to update.
+
+**User Filters**
+
+| Setting | Default | Description |
+|---|---|---|
+| Exclude accounts | _(empty)_ | Comma-separated words or patterns. Any user whose name, email, or UPN contains one of these is hidden everywhere (e.g. `conf-room, noreply, service`). |
+| Only show tenant users | Off | Hides accounts whose email domain does not match your tenant (removes gmail.com, hotmail.com, etc.). |
+| Hide Azure AD guest accounts | On | Hides guest (B2B) accounts from all views. |
+| Hide disabled accounts | On | Hides accounts with blocked sign-in (former employees, service accounts). |
+
+**Org Chart**
+
+| Setting | Description |
+|---|---|
+| Top-Level User | UPN or email of the person at the root of the chart (e.g. `ceo@company.com`). Required. |
+| Levels to load below root | How many hierarchy levels to fetch on initial load (1–8). |
+
+**Org Chart Features** — show or hide individual toolbar buttons.
+
+**Directory**
+
+| Setting | Description |
+|---|---|
+| Max employees per page | How many cards to show per page (10–200). |
 
 ### Settings Panel (per user, via ⚙ icon)
 
 | Setting | Description |
 |---|---|
 | Alphabet filter field | Sort/filter by first name or last name |
-| Show email | Toggle email addresses on cards |
-| Show phone | Toggle phone numbers on cards |
-| Show department | Toggle department on cards |
-| Show office location | Toggle office location on cards |
+| Card size | Small / Medium / Large |
+| Show email | Toggle email addresses on directory and org chart cards |
+| Show phone | Toggle phone numbers on directory and org chart cards |
+| Show department | Toggle department badge on cards |
+| Show office location | Toggle office location on directory and org chart cards |
+| Manager levels shown | Levels of the reporting chain to show above a focused person |
+| Compact cards | Smaller cards; useful for seeing more of the org chart at once |
 
 User preferences are saved to `localStorage` and persist across page reloads.
 
@@ -213,6 +262,10 @@ SharePointSmartOrgChart/
 **"Failed to load employees"** — Graph API permissions have not been approved. See [Approve Microsoft Graph permissions](#approve-microsoft-graph-permissions).
 
 **Org Chart shows "User not found"** — Check that Top-Level User contains a valid UPN or email (e.g. `john.doe@company.com`), not a display name.
+
+**New users or manager changes not appearing** — If you are using SharePoint Search as the data source, the search index may not have updated yet (indexing can take hours). Switch the Data Source setting to **Graph API** or **Auto** for real-time data.
+
+**Disabled / former employees still showing** — Open the property pane → User Filters and enable **Hide disabled accounts**. This requires the Graph API data source; SharePoint Search does not expose account status.
 
 **Photos not loading** — User photos require the `User.Read.All` scope. Verify that profile photos are set in Microsoft 365.
 
