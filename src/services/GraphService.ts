@@ -317,7 +317,7 @@ export class GraphService {
         const response = await this._graphClient
           .api(`/users/${encodeURIComponent(managerId)}/directReports`)
           .version('v1.0')
-          .select('id,displayName,mail,jobTitle,department,officeLocation,mobilePhone,businessPhones,userPrincipalName')
+          .select('id,displayName,mail,jobTitle,department,officeLocation,mobilePhone,businessPhones,userPrincipalName,accountEnabled,userType')
           .top(999)
           .get();
 
@@ -325,6 +325,7 @@ export class GraphService {
           id: string; displayName: string; mail: string; jobTitle: string;
           department: string; officeLocation: string; mobilePhone: string;
           businessPhones: string[]; userPrincipalName: string;
+          accountEnabled?: boolean; userType?: string;
         }> = response?.value || [];
 
         for (const rep of reports) {
@@ -349,6 +350,8 @@ export class GraphService {
             department:        rep.department      || '',
             officeLocation:    rep.officeLocation  || '',
             userPrincipalName: upn,
+            accountEnabled:    rep.accountEnabled,
+            userType:          rep.userType,
           });
         }
       } catch {
@@ -365,7 +368,7 @@ export class GraphService {
     if (!this._graphClient) throw new Error('Graph client not available');
 
     const users: IGraphUser[] = [];
-    const SELECT = 'id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones';
+    const SELECT = 'id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones,accountEnabled,userType';
     let url: string | null =
       `/users?$select=${SELECT}&$expand=manager($select=id,userPrincipalName,mail)&$top=999`;
 
@@ -383,6 +386,8 @@ export class GraphService {
         officeLocation: string;
         mobilePhone: string;
         businessPhones: string[];
+        accountEnabled?: boolean;
+        userType?: string;
         manager?: { id: string; userPrincipalName: string; mail: string };
       }> = response?.value || [];
 
@@ -418,6 +423,8 @@ export class GraphService {
           department:        item.department         || '',
           officeLocation:    item.officeLocation     || '',
           userPrincipalName: upn,
+          accountEnabled:    item.accountEnabled,
+          userType:          item.userType,
         });
       }
 
