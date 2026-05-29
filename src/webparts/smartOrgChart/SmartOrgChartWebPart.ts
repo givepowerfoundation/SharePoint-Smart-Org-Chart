@@ -61,8 +61,8 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
     // User filter defaults
     if (p.excludedAccounts       === undefined) p.excludedAccounts       = '';
     if (p.restrictToTenantDomain === undefined) p.restrictToTenantDomain = false;
-    if (p.hideGuestUsers         === undefined) p.hideGuestUsers         = false;
-    if (p.hideDisabledAccounts   === undefined) p.hideDisabledAccounts   = false;
+    if (p.hideGuestUsers         === undefined) p.hideGuestUsers         = true;
+    if (p.hideDisabledAccounts   === undefined) p.hideDisabledAccounts   = true;
     return super.onInit();
   }
 
