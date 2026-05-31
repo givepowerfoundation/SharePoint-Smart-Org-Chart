@@ -37,6 +37,8 @@ export interface IUserFilterOptions {
   excludedPatterns?: string[]; // lower-case substrings — hide any user whose name/UPN/mail contains one
   hideGuestUsers?: boolean;    // hide userType === 'Guest'
   hideDisabledAccounts?: boolean; // hide accountEnabled === false
+  hideNoJobTitle?: boolean;    // hide users with no jobTitle
+  hideNoDepartment?: boolean;  // hide users with no department
 }
 
 export class GraphService {
@@ -121,13 +123,17 @@ export class GraphService {
   }
 
   private _applyUserFilters(users: IGraphUser[]): IGraphUser[] {
-    const { tenantDomain, excludedPatterns, hideGuestUsers, hideDisabledAccounts } = this._filterOptions;
-    if (!tenantDomain && (!excludedPatterns || excludedPatterns.length === 0) && !hideGuestUsers && !hideDisabledAccounts) {
-      return users;
-    }
+    const { tenantDomain, excludedPatterns, hideGuestUsers, hideDisabledAccounts,
+            hideNoJobTitle, hideNoDepartment } = this._filterOptions;
+    const hasFilters = tenantDomain || (excludedPatterns && excludedPatterns.length > 0) ||
+                       hideGuestUsers || hideDisabledAccounts || hideNoJobTitle || hideNoDepartment;
+    if (!hasFilters) return users;
+
     return users.filter(user => {
       if (hideDisabledAccounts && user.accountEnabled === false) return false;
       if (hideGuestUsers && user.userType === 'Guest') return false;
+      if (hideNoJobTitle && !user.jobTitle) return false;
+      if (hideNoDepartment && !user.department) return false;
       if (tenantDomain) {
         const emailDomain = ((user.mail || user.id || '').split('@')[1] || '').toLowerCase();
         if (emailDomain && emailDomain !== tenantDomain) return false;

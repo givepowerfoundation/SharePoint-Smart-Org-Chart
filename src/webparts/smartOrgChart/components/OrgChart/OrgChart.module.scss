@@ -276,7 +276,7 @@
     transform: translateX(-50%);
     width: 2px;
     height: 24px;
-    background: #c6d2de;
+    background: $ms-color-themeLight;
     z-index: 0;
   }
 }
@@ -295,7 +295,7 @@
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 2px;
-    background: #c6d2de;
+    background: $ms-color-themeLight;
   }
 
   & > .nodeWrapper::before {
@@ -306,7 +306,7 @@
     transform: translateX(-50%);
     width: 2px;
     height: 30px;
-    background: #c6d2de;
+    background: $ms-color-themeLight;
   }
 }
 
@@ -320,7 +320,7 @@
   justify-content: flex-start;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-top: 3px solid #0078d4;
+  border-top: 3px solid $ms-color-themePrimary;
   border-radius: 10px;
   padding: 16px 10px 18px;
   width: 180px;
@@ -440,7 +440,7 @@
 
   .nodeCard {
     border-top: none;
-    border-left: 3px solid #0078d4;  /* overridden by JS inline style */
+    border-left: 3px solid $ms-color-themePrimary;
     border-radius: 6px;
     box-shadow: none;
     background: #ffffff;
@@ -979,7 +979,7 @@
 .childrenMultiCol {
   flex-wrap: wrap;
   justify-content: center;
-  border-top: 2px solid #c6d2de;
+  border-top: 2px solid $ms-color-themeLight;
 
   &::before { display: none; }
   > .nodeWrapper::before { display: none; }
@@ -991,7 +991,7 @@
   grid-auto-flow: column;
   flex-direction: unset;
   border-top: none;
-  border-left: 2px solid #c6d2de;
+  border-left: 2px solid $ms-color-themeLight;
   padding-left: 20px;
 
   &::before { display: none; }
@@ -1013,7 +1013,7 @@
       transform: none;
       width: 20px;
       height: 2px;
-      background: #c6d2de;
+      background: $ms-color-themeLight;
     }
   }
 

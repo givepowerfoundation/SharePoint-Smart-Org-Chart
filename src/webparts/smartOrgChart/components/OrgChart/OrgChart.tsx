@@ -78,9 +78,6 @@ function countTreeUsers(node: IOrgNode): { members: number; guests: number; disa
   return c;
 }
 
-function getSubtreeCount(node: IOrgNode): number {
-  return node.directReports.reduce((sum, c) => sum + 1 + getSubtreeCount(c), 0);
-}
 
 function getInitials(displayName: string): string {
   const parts = (displayName || '').split(' ').filter(p => p.length > 0);
@@ -125,27 +122,15 @@ function computeStats(node: IOrgNode, isVisible: (u: IGraphUser) => boolean): {
 import { OrgChartTheme } from '../ISmartOrgChartProps';
 export type { OrgChartTheme };
 
-const DEPT_PALETTE = [
-  '#0078d4', '#107c41', '#7b2d8b', '#c43501',
-  '#038387', '#8764b8', '#ca5010', '#00b7c3', '#e3008c', '#498205',
-];
-
-const DEPT_PALETTE_DARK = [
-  '#4ca3e6', '#4dbd7a', '#b97de8', '#f07040',
-  '#2cc6cc', '#b09ae0', '#f08040', '#40d4e0', '#ff61c0', '#92c94a',
-];
-
-function deptHash(dept: string): number {
-  let h = 0;
-  for (let i = 0; i < dept.length; i++) h = (Math.imul(31, h) + dept.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
-function getDeptColor(dept: string, theme: OrgChartTheme): string {
-  if (!dept) return theme === 'dark' ? DEPT_PALETTE_DARK[0] : DEPT_PALETTE[0];
+function getSiteColor(theme: OrgChartTheme): string {
   if (theme === 'corporate') return '#0052a5';
-  const idx = deptHash(dept) % DEPT_PALETTE.length;
-  return theme === 'dark' ? DEPT_PALETTE_DARK[idx] : DEPT_PALETTE[idx];
+  try {
+    const t = (window as any).__themeState__?.theme;
+    if (!t) return theme === 'dark' ? '#71afe5' : '#0078d4';
+    return theme === 'dark' ? (t.themeTertiary ?? '#71afe5') : (t.themePrimary ?? '#0078d4');
+  } catch {
+    return theme === 'dark' ? '#71afe5' : '#0078d4';
+  }
 }
 
 const THEME_CONTAINER_CLASS: Record<OrgChartTheme, string> = {
@@ -185,7 +170,7 @@ interface IPersonCardProps {
 }
 
 const PersonCard: React.FC<IPersonCardProps> = ({ user, photo, presence, theme, managerChain, onClose, onFocus }) => {
-  const deptColor = getDeptColor(user.department, theme);
+  const deptColor = getSiteColor(theme);
   const isDark = theme === 'dark';
   const initials = getInitials(user.displayName);
   const phone = user.mobilePhone || (user.businessPhones && user.businessPhones[0]) || '';
@@ -285,7 +270,7 @@ const PersonCard: React.FC<IPersonCardProps> = ({ user, photo, presence, theme, 
                     >
                       <span
                         className={styles.personCardChainInitials}
-                        style={{ background: getDeptColor(mgr.department, theme) }}
+                        style={{ background: getSiteColor(theme) }}
                       >
                         {getInitials(mgr.displayName)}
                       </span>
@@ -384,7 +369,6 @@ interface IOrgNodeCardProps {
   searchQuery: string;
   theme: OrgChartTheme;
   directReportCount: number;
-  subtreeCount: number;
   managerUser?: IGraphUser;
   compactCards: boolean;
   onToggle: (node: IOrgNode) => void;
@@ -394,12 +378,12 @@ interface IOrgNodeCardProps {
 
 const OrgNodeCard: React.FC<IOrgNodeCardProps> = ({
   node, photos, presenceMap, showDepartment, showOffice, isExpanding,
-  searchQuery, theme, directReportCount, subtreeCount, managerUser,
+  searchQuery, theme, directReportCount, managerUser,
   compactCards, onToggle, onCardClick, onFocus
 }) => {
   const { user } = node;
   const photo     = photos[user.id];
-  const deptColor = getDeptColor(user.department, theme);
+  const deptColor = getSiteColor(theme);
   const isDark    = theme === 'dark';
   const initials  = getInitials(user.displayName);
   const isRoot    = node.level === 0;
@@ -417,8 +401,7 @@ const OrgNodeCard: React.FC<IOrgNodeCardProps> = ({
     ? { borderLeft: `3px solid ${deptColor}`, borderTop: '1px solid #d8d8d8', opacity: isDisabled ? 0.55 : 1 }
     : { borderTopColor: deptColor, opacity: isDisabled ? 0.55 : 1 };
 
-  const showSubtreeCount = subtreeCount > directReportCount && node.childrenLoaded;
-  const countLabel = showSubtreeCount ? subtreeCount : directReportCount;
+  const countLabel = directReportCount;
 
   return (
     <div
@@ -495,8 +478,6 @@ const OrgNodeCard: React.FC<IOrgNodeCardProps> = ({
 
 /* ── Recursive tree ──────────────────────── */
 
-const MULTI_COL_THRESHOLD = 8;
-
 interface IOrgTreeProps {
   node: IOrgNode;
   photos: { [id: string]: string | null };
@@ -524,19 +505,6 @@ const OrgTree: React.FC<IOrgTreeProps> = ({
 
   const visibleReports     = node.directReports.filter(c => isVisible(c.user));
   const hasVisibleChildren = node.isExpanded && visibleReports.length > 0;
-  const subtreeCount       = getSubtreeCount(node);
-  const useMultiCol        = visibleReports.length >= MULTI_COL_THRESHOLD;
-  const halfCount          = Math.ceil(visibleReports.length / 2);
-
-  const multiColStyle: React.CSSProperties | undefined = useMultiCol
-    ? (chartLayout === 'horizontal'
-        ? { gridTemplateRows: `repeat(${halfCount}, auto)` }
-        : { maxWidth: `${halfCount * 220}px` })
-    : undefined;
-
-  const childrenClass = useMultiCol
-    ? `${styles.children} ${styles.childrenMultiCol}`
-    : styles.children;
 
   return (
     <div className={`${styles.nodeWrapper} ${hasVisibleChildren ? styles.hasChildren : ''}`}>
@@ -550,7 +518,6 @@ const OrgTree: React.FC<IOrgTreeProps> = ({
         searchQuery={searchQuery}
         theme={theme}
         directReportCount={visibleReports.length}
-        subtreeCount={subtreeCount}
         managerUser={parentUser}
         compactCards={compactCards}
         onToggle={onToggle}
@@ -558,7 +525,7 @@ const OrgTree: React.FC<IOrgTreeProps> = ({
         onFocus={onFocus}
       />
       {hasVisibleChildren && (
-        <div className={childrenClass} style={multiColStyle}>
+        <div className={styles.children}>
           {visibleReports.map(child => (
             <OrgTree
               key={child.user.id}
@@ -927,8 +894,58 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     }
   }
 
-  private _handleCollapseAll  = (): void => { if (this.state.rootNode) this.setState({ rootNode: collapseAll(this.state.rootNode) }); }
-  private _handleExpandLoaded = (): void => { if (this.state.rootNode) this.setState({ rootNode: expandLoaded(this.state.rootNode) }); }
+  private _handleCollapseAll = (): void => { if (this.state.rootNode) this.setState({ rootNode: collapseAll(this.state.rootNode) }); }
+
+  // Expand All: first expand already-loaded nodes for immediate feedback,
+  // then BFS-load every unloaded frontier level until the full tree is in memory.
+  private _handleExpandLoaded = async (): Promise<void> => {
+    if (!this.state.rootNode) return;
+    let root = expandLoaded(this.state.rootNode);
+    this.setState({ rootNode: root });
+
+    const gs = this.props.graphService;
+    if (!gs) return;
+
+    while (this._mounted) {
+      const frontier = this._getUnloadedFrontier(root);
+      if (frontier.length === 0) break;
+
+      const BATCH = 8;
+      for (let i = 0; i < frontier.length; i += BATCH) {
+        if (!this._mounted) return;
+        const slice = frontier.slice(i, i + BATCH);
+        const results = await Promise.all(
+          slice.map(n => gs.getDirectReports(n.user.id)
+            .then(r  => ({ node: n, reports: r }))
+            .catch(() => ({ node: n, reports: [] as IGraphUser[] }))
+          )
+        );
+        const newIds: string[] = [];
+        for (const { node: n, reports } of results) {
+          const children: IOrgNode[] = reports.map(u => ({
+            user: u, directReports: [], isExpanded: false, childrenLoaded: false, level: n.level + 1,
+          }));
+          root = injectChildren(root, n.user.id, children);
+          newIds.push(...reports.map(u => u.id));
+        }
+        root = expandLoaded(root);
+        if (this._mounted) {
+          this.setState({ rootNode: root });
+          if (newIds.length) this._loadPhotos(newIds);
+        }
+      }
+    }
+  }
+
+  private _getUnloadedFrontier = (node: IOrgNode): IOrgNode[] => {
+    const result: IOrgNode[] = [];
+    const visit = (n: IOrgNode): void => {
+      if (!n.childrenLoaded) result.push(n);
+      else n.directReports.forEach(visit);
+    };
+    visit(node);
+    return result;
+  }
 
   /* ── Card click → profile popup ── */
 
@@ -1228,7 +1245,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
                 >
                   <span
                     className={styles.drillNavInitials}
-                    style={{ background: getDeptColor(person.department, theme) }}
+                    style={{ background: getSiteColor(theme) }}
                   >
                     {getInitials(person.displayName)}
                   </span>
@@ -1241,7 +1258,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
               <span className={styles.drillNavCurrent}>
                 <span
                   className={styles.drillNavInitials}
-                  style={{ background: getDeptColor(currentUser.department, theme) }}
+                  style={{ background: getSiteColor(theme) }}
                 >
                   {getInitials(currentUser.displayName)}
                 </span>
@@ -1257,7 +1274,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
             className={styles.drillCurrentHeader}
             style={{
               background: headerBg,
-              borderBottom: `3px solid ${getDeptColor(currentUser.department, theme)}`,
+              borderBottom: `3px solid ${getSiteColor(theme)}`,
               borderTop: `1px solid ${headerBorder}`,
             }}
           >
@@ -1272,7 +1289,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
                   />
                 : <div
                     className={styles.drillCurrentAvatarInitials}
-                    style={{ background: getDeptColor(currentUser.department, theme) }}
+                    style={{ background: getSiteColor(theme) }}
                   >
                     {getInitials(currentUser.displayName)}
                   </div>
@@ -1286,7 +1303,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
               {currentUser.jobTitle && (
                 <div
                   className={styles.drillCurrentTitle}
-                  style={{ color: getDeptColor(currentUser.department, theme) }}
+                  style={{ color: getSiteColor(theme) }}
                 >
                   {currentUser.jobTitle}
                 </div>
@@ -1343,7 +1360,6 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
                       searchQuery=""
                       theme={theme}
                       directReportCount={count ?? 0}
-                      subtreeCount={count ?? 0}
                       compactCards={compactCards}
                       onToggle={node => this._handleDrillInto(node.user)}
                       onCardClick={this._handleDrillInto}
@@ -1456,7 +1472,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
             {showSearchResults && searchResults.length > 0 && (
               <div className={styles.searchResults}>
                 {searchResults.map(u => {
-                  const color = getDeptColor(u.department, theme);
+                  const color = getSiteColor(theme);
                   return (
                     <button
                       key={u.id}
@@ -1669,7 +1685,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
                   onClick={() => this._handleFocusUser(ancestor)}
                   title={`Focus on ${ancestor.displayName}`}
                 >
-                  <span className={styles.ancestorInitials} style={{ background: getDeptColor(ancestor.department, theme) }}>
+                  <span className={styles.ancestorInitials} style={{ background: getSiteColor(theme) }}>
                     {getInitials(ancestor.displayName)}
                   </span>
                   <span className={styles.ancestorName}>{ancestor.displayName.split(' ')[0]}</span>
@@ -1678,7 +1694,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
               </React.Fragment>
             ))}
             <span className={styles.ancestorCurrent}>
-              <span className={styles.ancestorInitials} style={{ background: getDeptColor(focusedUser.department, theme) }}>
+              <span className={styles.ancestorInitials} style={{ background: getSiteColor(theme) }}>
                 {getInitials(focusedUser.displayName)}
               </span>
               <span className={styles.ancestorName}>{focusedUser.displayName}</span>
@@ -1719,7 +1735,6 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
                 onCardClick={this._handleCardClick}
                 onFocus={this._handleFocusUser}
               />
-
             </div>
           </div>
         )}

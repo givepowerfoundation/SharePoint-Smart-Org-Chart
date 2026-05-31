@@ -4,6 +4,9 @@
 [![SPFx](https://img.shields.io/badge/SPFx-1.18.2-green.svg)](https://aka.ms/spfx)
 [![Node](https://img.shields.io/badge/Node-18_LTS-brightgreen.svg)](https://nodejs.org)
 
+[![🌐 Product Website](https://img.shields.io/badge/🌐%20Product%20Website-sharepointsmartsolutions.com-0078d4?style=for-the-badge)](https://sharepointsmartsolutions.com/smart-org-chart)
+[![📖 User Guide](https://img.shields.io/badge/📖%20User%20Guide-Read%20the%20docs-6a4c93?style=for-the-badge)](docs/USER_GUIDE.md)
+
 A SharePoint Framework (SPFx) web part that provides a searchable **Employee Directory** and an interactive **Org Chart**, both powered by Microsoft Graph.
 
 ![Smart Org Chart overview](docs/screenshots/01-overview.png)
@@ -17,18 +20,20 @@ A SharePoint Framework (SPFx) web part that provides a searchable **Employee Dir
 | **Employee Directory** | Responsive card grid — photo, name, job title, department, office, email, phone |
 | **Real-time search** | Filters by name, title, email, or department as you type |
 | **Alphabet filter** | A–Z filter bar, switchable between first name or last name |
+| **List view** | Compact single-row list alternative to the card grid |
 | **Org Chart** | Hierarchical tree built from the Azure AD `manager` field |
 | **Three chart layouts** | Drill-down, vertical tree, and horizontal tree |
-| **Lazy expand** | Child nodes are fetched on demand when you expand them |
-| **Wide-org wrapping** | When a manager has 8+ direct reports the children automatically wrap into 2 rows/columns, keeping the chart readable without zooming |
+| **Full Expand All** | Loads and expands the complete organisation from Microsoft Graph in one click |
+| **Lazy expand** | Individual branches fetched on demand when expanded |
 | **Department & user filters** | Narrow the chart to specific departments or hide guests/members |
-| **User account filters** | Admin-controlled: hide disabled accounts, hide guests, restrict to tenant domain, exclude by name pattern |
-| **Statistics panel** | Headcount by department, overlaid on the chart |
+| **User account filters** | Admin-controlled: hide disabled accounts, hide guests, restrict to tenant domain, exclude by name pattern, exclude room mailboxes by pattern |
+| **Statistics panel** | Headcount, departments, avg reporting span, overlaid on the chart |
 | **User preferences** | Per-user settings saved to `localStorage` (card size, sort order, visible fields, compact mode, etc.) |
 | **Photo support** | Profile photos from Graph with base64 caching; initials avatar fallback |
+| **Presence badges** | Live availability status from Microsoft Teams, refreshed every 60 seconds |
 | **Export** | Download the current view as a PDF or PNG |
 | **Demo mode** | Built-in mock data (150 / 500 / 1,000 people) for testing without Graph permissions |
-| **Themes** | Modern, Minimal, Corporate, and Dark |
+| **Themes** | Modern, Minimal, Corporate, and Dark — accent colours follow your SharePoint site theme |
 | **Configurable data source** | Graph API (live, no indexing delay), SharePoint Search, or Auto (Graph with SP Search fallback) |
 
 ---
@@ -114,9 +119,9 @@ The web part requests two delegated Graph permissions. A Global or SharePoint Ad
 1. In SharePoint Admin Center go to **Advanced** → **API access**.
 2. Approve:
    - `Microsoft Graph — User.Read.All`
-   - `Microsoft Graph — User.ReadBasic.All`
+   - `Microsoft Graph — Presence.Read.All`
 
-> Without these approvals the web part loads but cannot retrieve user data.
+> Without these approvals the web part loads but cannot retrieve user data or presence status.
 
 ### Add the web part to a page
 
@@ -164,7 +169,7 @@ You can also run the demo server manually and open it in a browser (see `demo/` 
 
 | Setting | Description |
 |---|---|
-| Chart theme | Modern, Minimal, Corporate, or Dark |
+| Chart theme | Modern, Minimal, Corporate, or Dark — accent colours follow the SharePoint site theme |
 | Default layout | Drill-Down, Vertical, or Horizontal |
 
 **Data Source**
@@ -181,10 +186,11 @@ You can also run the demo server manually and open it in a browser (see `demo/` 
 
 | Setting | Default | Description |
 |---|---|---|
-| Exclude accounts | _(empty)_ | Comma-separated words or patterns. Any user whose name, email, or UPN contains one of these is hidden everywhere (e.g. `conf-room, noreply, service`). |
+| Exclude accounts | _(empty)_ | Comma-separated words or patterns. Any user whose name, email, or UPN contains one of these is hidden everywhere (e.g. `noreply, svc-`). |
+| Exclude room accounts by pattern | _(empty)_ | Comma-separated patterns that identify meeting room mailboxes (e.g. `conf-, room-, mrm@`). Hidden regardless of account status. |
 | Only show tenant users | Off | Hides accounts whose email domain does not match your tenant (removes gmail.com, hotmail.com, etc.). |
-| Hide Azure AD guest accounts | On | Hides guest (B2B) accounts from all views. |
-| Hide disabled accounts | On | Hides accounts with blocked sign-in (former employees, service accounts). |
+| Hide Azure AD guest accounts | **On** | Hides guest (B2B) accounts from all views. |
+| Hide disabled accounts | **On** | Hides accounts with blocked sign-in (former employees, service accounts). |
 
 **Org Chart**
 
@@ -266,6 +272,8 @@ SharePointSmartOrgChart/
 **New users or manager changes not appearing** — If you are using SharePoint Search as the data source, the search index may not have updated yet (indexing can take hours). Switch the Data Source setting to **Graph API** or **Auto** for real-time data.
 
 **Disabled / former employees still showing** — Open the property pane → User Filters and enable **Hide disabled accounts**. This requires the Graph API data source; SharePoint Search does not expose account status.
+
+**Meeting rooms appearing in the directory** — Open the property pane → User Filters and add the naming pattern used for room mailboxes in your organisation to the **Exclude room accounts by pattern** field (e.g. `conf-, room-`). If your room accounts have blocked sign-in, enabling **Hide disabled accounts** will also remove them.
 
 **Photos not loading** — User photos require the `User.Read.All` scope. Verify that profile photos are set in Microsoft 365.
 

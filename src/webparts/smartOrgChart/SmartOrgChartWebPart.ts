@@ -39,6 +39,8 @@ export interface ISmartOrgChartWebPartProps {
   restrictToTenantDomain: boolean;
   hideGuestUsers: boolean;
   hideDisabledAccounts: boolean;
+  hideNoJobTitle: boolean;
+  hideNoDepartment: boolean;
 }
 
 export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOrgChartWebPartProps> {
@@ -63,6 +65,8 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
     if (p.restrictToTenantDomain === undefined) p.restrictToTenantDomain = false;
     if (p.hideGuestUsers         === undefined) p.hideGuestUsers         = true;
     if (p.hideDisabledAccounts   === undefined) p.hideDisabledAccounts   = true;
+    if (p.hideNoJobTitle         === undefined) p.hideNoJobTitle         = false;
+    if (p.hideNoDepartment       === undefined) p.hideNoDepartment       = false;
     return super.onInit();
   }
 
@@ -88,6 +92,8 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
       restrictToTenantDomain: this.properties.restrictToTenantDomain || false,
       hideGuestUsers:         this.properties.hideGuestUsers         || false,
       hideDisabledAccounts:   this.properties.hideDisabledAccounts   || false,
+      hideNoJobTitle:         this.properties.hideNoJobTitle         || false,
+      hideNoDepartment:       this.properties.hideNoDepartment       || false,
       onSettingsSaved: (newProps: Partial<ISmartOrgChartWebPartProps>) => {
         Object.assign(this.properties, newProps);
       }
@@ -217,6 +223,16 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
                   label: 'Hide disabled accounts',
                   onText: 'On — blocked sign-in accounts hidden',
                   offText: 'Off — disabled accounts visible (shown with Disabled badge)'
+                }),
+                PropertyPaneToggle('hideNoJobTitle', {
+                  label: 'Hide accounts without a job title',
+                  onText: 'On — accounts with no job title hidden',
+                  offText: 'Off — all accounts shown regardless of job title'
+                }),
+                PropertyPaneToggle('hideNoDepartment', {
+                  label: 'Hide accounts without a department',
+                  onText: 'On — accounts with no department hidden',
+                  offText: 'Off — all accounts shown regardless of department'
                 }),
               ]
             },

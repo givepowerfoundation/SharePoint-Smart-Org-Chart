@@ -97,7 +97,9 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
       prev.excludedAccounts      !== this.props.excludedAccounts ||
       prev.hideDisabledAccounts  !== this.props.hideDisabledAccounts ||
       prev.hideGuestUsers        !== this.props.hideGuestUsers ||
-      prev.restrictToTenantDomain !== this.props.restrictToTenantDomain
+      prev.restrictToTenantDomain !== this.props.restrictToTenantDomain ||
+      prev.hideNoJobTitle        !== this.props.hideNoJobTitle ||
+      prev.hideNoDepartment      !== this.props.hideNoDepartment
     ) {
       await this._initGraphService();
     }
@@ -136,6 +138,8 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
         .filter(s => s.length > 0),
       hideGuestUsers:       this.props.hideGuestUsers       || false,
       hideDisabledAccounts: this.props.hideDisabledAccounts || false,
+      hideNoJobTitle:       this.props.hideNoJobTitle       || false,
+      hideNoDepartment:     this.props.hideNoDepartment     || false,
     };
 
     this.setState({
