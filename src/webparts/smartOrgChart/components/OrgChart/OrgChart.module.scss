@@ -293,7 +293,9 @@
   &::before {
     content: '';
     position: absolute;
-    top: 0; left: 0; right: 0;
+    top: 0;
+    left: var(--conn-left, 0px);
+    right: var(--conn-right, 0px);
     height: 2px;
     background: $ms-color-themeLight;
   }

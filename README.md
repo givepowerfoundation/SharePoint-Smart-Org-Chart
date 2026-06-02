@@ -4,7 +4,7 @@
 [![SPFx](https://img.shields.io/badge/SPFx-1.18.2-green.svg)](https://aka.ms/spfx)
 [![Node](https://img.shields.io/badge/Node-18_LTS-brightgreen.svg)](https://nodejs.org)
 
-[![🌐 Product Website](https://img.shields.io/badge/🌐%20Product%20Website-sharepointsmartsolutions.com-0078d4?style=for-the-badge)](https://sharepointsmartsolutions.com/smart-org-chart)
+[![🌐 Website](https://img.shields.io/badge/🌐%20Product%20Website-sharepointsmartsolutions.com-0078d4?style=for-the-badge)](https://sharepointsmartsolutions.com/smart-org-chart)
 [![📖 User Guide](https://img.shields.io/badge/📖%20User%20Guide-Read%20the%20docs-6a4c93?style=for-the-badge)](docs/USER_GUIDE.md)
 
 A SharePoint Framework (SPFx) web part that provides a searchable **Employee Directory** and an interactive **Org Chart**, both powered by Microsoft Graph.
@@ -31,7 +31,7 @@ A SharePoint Framework (SPFx) web part that provides a searchable **Employee Dir
 | **User preferences** | Per-user settings saved to `localStorage` (card size, sort order, visible fields, compact mode, etc.) |
 | **Photo support** | Profile photos from Graph with base64 caching; initials avatar fallback |
 | **Presence badges** | Live availability status from Microsoft Teams, refreshed every 60 seconds |
-| **Export** | Download the current view as a PDF or PNG |
+| **Export** | Download the current view as a PDF |
 | **Demo mode** | Built-in mock data (150 / 500 / 1,000 people) for testing without Graph permissions |
 | **Themes** | Modern, Minimal, Corporate, and Dark — accent colours follow your SharePoint site theme |
 | **Configurable data source** | Graph API (live, no indexing delay), SharePoint Search, or Auto (Graph with SP Search fallback) |
@@ -100,10 +100,10 @@ This opens the SharePoint workbench at the URL above. Add **Smart Org Chart** to
 ### Package for production
 
 ```bash
-npm run package
+npm run ship
 ```
 
-Produces `sharepoint/solution/smart-org-chart.sppkg`.
+Produces `sharepoint/solution/smart-org-chart.sppkg`. (`npm run package` is an equivalent alias.)
 
 ### Deploy to SharePoint
 

@@ -177,10 +177,6 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
     }
   }
 
-  private _exportPng = (): void => {
-    this._orgChartRef.current?.exportPng();
-  }
-
   private _openSettings = (): void => {
     this.setState({ isSettingsOpen: true });
   }
@@ -253,15 +249,6 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
               onClick={this._exportPdf}
               className={styles.actionBtn}
             />
-            {currentView === 'orgchart' && (
-              <IconButton
-                iconProps={{ iconName: 'Photo2' }}
-                title="Export to PNG image"
-                ariaLabel="Export org chart to PNG"
-                onClick={this._exportPng}
-                className={styles.actionBtn}
-              />
-            )}
             <IconButton
               iconProps={{ iconName: 'Settings' }}
               title="Preferences"

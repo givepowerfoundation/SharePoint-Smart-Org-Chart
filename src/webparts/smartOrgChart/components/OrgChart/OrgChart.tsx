@@ -5,7 +5,7 @@ import { TextField } from '@fluentui/react/lib/TextField';
 import { SearchBox } from '@fluentui/react/lib/SearchBox';
 import { PrimaryButton, DefaultButton } from '@fluentui/react/lib/Button';
 import { IGraphUser, IOrgNode, PresenceAvailability } from '../../../../services/GraphService';
-import { exportOrgChartToPdf, exportOrgChartToPng } from '../../../../services/PdfExportService';
+import { exportOrgChartToPdf } from '../../../../services/PdfExportService';
 import { IOrgChartProps, IOrgChartState } from './IOrgChartProps';
 import styles from './OrgChart.module.scss';
 
@@ -714,6 +714,10 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       if (this.props.graphService && this.props.topLevelUser) await this._loadTree();
     }
 
+    if (prevState.rootNode !== this.state.rootNode) {
+      this._fixConnectorLines();
+    }
+
     const { isLoading, chartLayout, showStats, filterMembers, filterGuests,
             filterDepartments, zoomLevel, drillPath, focusedUser } = this.state;
     if (!isLoading && (
@@ -764,11 +768,6 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     if (this.state.rootNode) exportOrgChartToPdf(this.state.rootNode);
   }
 
-  public exportPng(): void {
-    const el = this._drillViewRef.current ?? this._scrollRef.current;
-    if (el) exportOrgChartToPng(el);
-  }
-
   private async _loadTree(): Promise<void> {
     const { graphService, topLevelUser, levelsBelow } = this.props;
     if (!graphService) return;
@@ -810,6 +809,24 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     }
   }
 
+  private _fixConnectorLines(): void {
+    requestAnimationFrame(() => {
+      const container = this._scrollRef.current;
+      if (!container || !this._mounted) return;
+      const zoom = this.state.zoomLevel || 1;
+      const allChildren = container.querySelectorAll(`.${styles.children}`) as NodeListOf<HTMLElement>;
+      allChildren.forEach(childrenDiv => {
+        const first = childrenDiv.firstElementChild as HTMLElement;
+        const last  = childrenDiv.lastElementChild  as HTMLElement;
+        if (!first || !last) return;
+        const left  = first.getBoundingClientRect().width / (2 * zoom);
+        const right = last.getBoundingClientRect().width  / (2 * zoom);
+        childrenDiv.style.setProperty('--conn-left',  `${left}px`);
+        childrenDiv.style.setProperty('--conn-right', `${right}px`);
+      });
+    });
+  }
+
   private _autoFitZoom(): void {
     requestAnimationFrame(() => {
       const container = this._scrollRef.current;
@@ -825,7 +842,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       const scaleX = cW / naturalW;
       const scaleY = cH / naturalH;
       const fitZoom = Math.min(scaleX, scaleY) * 0.90;
-      const newZoom = Math.max(0.4, Math.min(0.95, fitZoom));
+      const newZoom = Math.max(0.25, Math.min(0.95, fitZoom));
       if (newZoom < this.state.zoomLevel) {
         this.setState({ zoomLevel: newZoom });
       }
@@ -935,6 +952,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
         }
       }
     }
+    if (this._mounted) this._autoFitZoom();
   }
 
   private _getUnloadedFrontier = (node: IOrgNode): IOrgNode[] => {
@@ -1641,7 +1659,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
           {/* Zoom — only in full-tree mode */}
           {!isDrillMode && (
             <div className={styles.zoomControls}>
-              <button className={styles.zoomBtn} onClick={() => this.setState({ zoomLevel: Math.max(0.4, zoomLevel - 0.1) })} title="Zoom out" disabled={zoomLevel <= 0.4}>
+              <button className={styles.zoomBtn} onClick={() => this.setState({ zoomLevel: Math.max(0.25, zoomLevel - 0.1) })} title="Zoom out" disabled={zoomLevel <= 0.25}>
                 <Icon iconName="Remove" />
               </button>
               <span className={styles.zoomLabel}>{Math.round(zoomLevel * 100)}%</span>
@@ -1718,7 +1736,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
             onTouchStart={this._handleTouchStart}
             onTouchEnd={this._handleTouchEnd}
           >
-            <div style={{ transformOrigin: 'top center', transform: `scale(${zoomLevel})`, transition: 'transform 0.15s ease' }}>
+            <div style={{ zoom: zoomLevel, display: 'inline-block', minWidth: '100%' }}>
               <OrgTree
                 node={rootNode}
                 photos={photos}

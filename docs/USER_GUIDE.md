@@ -1,5 +1,5 @@
 # Smart Org Chart — User Guide
-**Version 1.0.1**
+**Version 1.1.0**
 
 Smart Org Chart is a SharePoint web part that gives your organisation two complementary views of its people data: a searchable **Employee Directory** and an interactive **Org Chart**, both powered by Microsoft Graph.
 
@@ -43,7 +43,6 @@ The header bar is always visible at the top of the web part.
 | **App / View title** | Company name (if set) and the name of the current view |
 | **View toggle** | Switches between Employee Directory and Org Chart |
 | **Export PDF** | Downloads the current view as a PDF |
-| **Export PNG** | Downloads the org chart as a PNG image (org chart view only) |
 | **Settings gear** | Opens the [User Preferences](#6-user-preferences) panel |
 
 > **Demo mode banner:** When the web part is running on localhost or the admin has enabled *Use Demo Data*, a yellow banner appears below the header letting you switch between 150, 500, and 1,000 person sample datasets.
@@ -148,7 +147,7 @@ The toolbar appears above the chart and contains the following controls (some ma
 | **Stats bar** (chart icon) | Toggles a summary bar showing total people, members, guests, departments, and average reporting span. |
 | **Department filter** (tools icon) | Shows checkboxes to show only selected departments. A badge on the button shows how many filters are active. |
 | **User type filter** (funnel icon) | Toggles visibility of Regular members and Guest users. |
-| **Zoom controls** | Visible in tree modes only. Adjust the scale from 40% to 150%. |
+| **Zoom controls** | Visible in tree modes only. Adjust the scale from 25% to 150%. |
 
 #### Stats bar
 
@@ -218,16 +217,10 @@ Click **Save** to apply changes. **Cancel** discards unsaved changes.
 
 ## 7. Exporting
 
-### PDF export
-
 Click the **Download** (↓) button in the header bar to export the current view to PDF.
 
 - **Directory:** exports all visible employee cards, respecting the current alphabet/search filter.
 - **Org Chart:** exports the currently visible chart tree.
-
-### PNG export
-
-Click the **Photo** button in the header bar (visible when in org chart view) to export the chart as a PNG image. The exported image captures the full chart canvas, including any nodes that are off-screen.
 
 ---
 
@@ -332,6 +325,5 @@ The **Chart Theme** property controls the visual appearance of employee cards an
 - **See the whole org:** Click **Expand All** in the tree toolbar. The web part will load every level from Microsoft Graph and expand them automatically.
 - **Navigate deep hierarchies:** In drill-down mode, click through cards to explore; use the breadcrumb to jump back up without reloading the tree.
 - **Compare departments:** Use the department filter to isolate one or more teams in the org chart.
-- **Export a team tree:** Navigate to the team lead in drill-down mode, then switch to vertical tree and click Export PNG for a clean snapshot.
 - **Presence badges:** Presence status (green = Available, red = Busy, yellow = Away) updates every 60 seconds from Microsoft Teams.
 - **Hide room mailboxes:** If meeting rooms appear in the directory, add their naming pattern (e.g. `conf-`) to **Exclude room accounts by pattern** in the property pane.
