@@ -19,7 +19,6 @@ const LS_KEY      = 'smartOrgChart_userSettings';
 const LS_MOCK_KEY = 'smartOrgChart_mockSize';
 const LS_VIEW_KEY = 'smartOrgChart_currentView';
 
-const MOCK_SIZES: MockCompanySize[] = [150, 500, 1000];
 
 interface ISmartOrgChartState {
   currentView: 'directory' | 'orgchart';
@@ -29,17 +28,17 @@ interface ISmartOrgChartState {
   mockSize: MockCompanySize;
 }
 
-function loadUserSettings(): IUserSettings {
+function loadUserSettings(defaultFontScale = 1): IUserSettings {
   try {
     const stored = localStorage.getItem(LS_KEY);
-    if (stored) return { ...buildDefaultSettings(), ...JSON.parse(stored) };
+    if (stored) return { ...buildDefaultSettings(defaultFontScale), ...JSON.parse(stored) };
   } catch {
     // ignore
   }
-  return buildDefaultSettings();
+  return buildDefaultSettings(defaultFontScale);
 }
 
-function buildDefaultSettings(): IUserSettings {
+function buildDefaultSettings(defaultFontScale = 1): IUserSettings {
   return {
     alphabetFilterField: 'firstName',
     cardSize: 'medium',
@@ -49,6 +48,7 @@ function buildDefaultSettings(): IUserSettings {
     showOffice: true,
     levelsAbove: 1,
     compactCards: false,
+    fontScale: defaultFontScale,
   };
 }
 
@@ -75,7 +75,7 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
 
   constructor(props: ISmartOrgChartProps) {
     super(props);
-    const userSettings = loadUserSettings();
+    const userSettings = loadUserSettings(props.defaultFontScale || 1);
     const mockSize     = readMockSize();
     this.state = {
       currentView: readCurrentView(props.defaultView || 'directory'),
@@ -210,7 +210,7 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
     })();
 
     return (
-      <div className={styles.container}>
+      <div className={styles.container} style={{ '--soc-font-scale': userSettings.fontScale || 1 } as React.CSSProperties}>
         <div className={styles.header}>
           <div className={styles.brandArea}>
             {resolvedLogoUrl && (
@@ -295,30 +295,18 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
               enableStats={this.props.enableStats !== false}
               enableDeptFilter={this.props.enableDeptFilter !== false}
               enableUserFilter={this.props.enableUserFilter !== false}
+              defaultZoom={this.props.defaultZoom ?? 0}
             />
           )}
         </div>
-
-        {this.props.useDemoData && !this.props.hideDemoBanner && (
-          <div className={styles.demoBanner}>
-            <span className={styles.demoBannerLabel}>Demo data</span>
-            {MOCK_SIZES.map(s => (
-              <button
-                key={s}
-                className={`${styles.demoBannerBtn}${mockSize === s ? ` ${styles.demoBannerBtnActive}` : ''}`}
-                onClick={() => this._setMockSize(s)}
-              >
-                {s.toLocaleString()} people
-              </button>
-            ))}
-          </div>
-        )}
 
         <SettingsPanel
           isOpen={isSettingsOpen}
           settings={userSettings}
           onDismiss={this._closeSettings}
           onSave={this._saveSettings}
+          mockSize={this.props.useDemoData ? mockSize : undefined}
+          onMockSizeChange={this.props.useDemoData ? this._setMockSize : undefined}
         />
       </div>
     );

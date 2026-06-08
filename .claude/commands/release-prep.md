@@ -21,9 +21,9 @@ From these, produce a definitive list of all views, admin settings, and user-fac
 
 ---
 
-## Step 3 — Update `docs/USER_GUIDE.md`
+## Step 3 — Update `USER-GUIDE.md`
 
-Read `docs/USER_GUIDE.md` in full. Then update it:
+Read `USER-GUIDE.md` in full. Then update it:
 - Change the version number in the heading to the new version.
 - Update the Table of Contents to match the actual sections you will write.
 - Remove any sections that describe features no longer in the app (check against the feature list from Step 2).
@@ -110,7 +110,7 @@ Release checklist for vX.X.X
 ─────────────────────────────────────────────────────────
 Automated (completed by this command):
   ✅ TypeScript compiles cleanly
-  ✅ docs/USER_GUIDE.md updated
+  ✅ USER-GUIDE.md updated
   ✅ README.md updated
   ✅ CHANGELOG.md updated
   ✅ Security check passed (no tenant URLs or org names exposed)

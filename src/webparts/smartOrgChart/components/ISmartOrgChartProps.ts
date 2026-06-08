@@ -18,4 +18,5 @@ export interface IUserSettings {
   showOffice: boolean;
   levelsAbove: number;
   compactCards: boolean;
+  fontScale: number;
 }

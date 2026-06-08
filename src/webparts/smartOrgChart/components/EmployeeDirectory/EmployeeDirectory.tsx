@@ -5,7 +5,7 @@ import { SearchBox } from '@fluentui/react/lib/SearchBox';
 import { Dropdown, IDropdownOption } from '@fluentui/react/lib/Dropdown';
 import { IGraphUser, PresenceAvailability } from '../../../../services/GraphService';
 import { IEmployeeDirectoryProps } from './IEmployeeDirectoryProps';
-import { exportDirectoryToPdf } from '../../../../services/PdfExportService';
+import { exportDirectoryToPdf, exportDirectoryToExcel } from '../../../../services/PdfExportService';
 import styles from './EmployeeDirectory.module.scss';
 
 const ALPHABET = ['All', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
@@ -100,6 +100,11 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
   public exportPdf(): void {
     const { showEmail, showPhone, showDepartment, showOffice } = this.props;
     exportDirectoryToPdf(this._getFilteredUsers(), { showEmail, showPhone, showDepartment, showOffice });
+  }
+
+  public exportExcel(): void {
+    const { showEmail, showPhone, showDepartment, showOffice } = this.props;
+    exportDirectoryToExcel(this._getFilteredUsers(), { showEmail, showPhone, showDepartment, showOffice });
   }
 
   private async _loadUsers(): Promise<void> {
@@ -441,6 +446,15 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
               <Icon iconName="Cancel" /> Clear
             </button>
           )}
+
+          <button
+            className={styles.exportExcelBtn}
+            onClick={() => this.exportExcel()}
+            title="Export all filtered results to Excel"
+          >
+            <Icon iconName="Download" />
+            <span>Export</span>
+          </button>
 
           <div className={styles.viewToggle}>
             <button

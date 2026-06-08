@@ -21,8 +21,18 @@ const alphabetOptions: IDropdownOption[] = [
 
 const cardSizeOptions: IDropdownOption[] = [
   { key: 'small', text: 'Small — compact, more cards visible' },
-  { key: 'medium', text: 'Medium — balanced (recommended)' },
+  { key: 'medium', text: 'Medium — balanced' },
   { key: 'large', text: 'Large — spacious, fewer cards' }
+];
+
+const fontScaleOptions: IDropdownOption[] = [
+  { key: 0.75, text: '75% — Extra Small' },
+  { key: 0.85, text: '85% — Small' },
+  { key: 1,    text: '100% — Normal' },
+  { key: 1.15, text: '115% — Large' },
+  { key: 1.3,  text: '130% — Extra Large' },
+  { key: 1.5,  text: '150% — XXL' },
+  { key: 1.75, text: '175% — XXXL' },
 ];
 
 export class SettingsPanel extends React.Component<ISettingsPanelProps, ISettingsPanelState> {
@@ -50,7 +60,7 @@ export class SettingsPanel extends React.Component<ISettingsPanelProps, ISetting
   }
 
   public render(): React.ReactElement {
-    const { isOpen, onDismiss } = this.props;
+    const { isOpen, onDismiss, mockSize, onMockSizeChange } = this.props;
     const { draft } = this.state;
 
     return (
@@ -87,6 +97,14 @@ export class SettingsPanel extends React.Component<ISettingsPanelProps, ISetting
             selectedKey={draft.cardSize}
             options={cardSizeOptions}
             onChange={(_, o) => o && this._update('cardSize', o.key as 'small' | 'medium' | 'large')}
+            className={styles.field}
+          />
+
+          <Dropdown
+            label="Font Size"
+            selectedKey={draft.fontScale || 1}
+            options={fontScaleOptions}
+            onChange={(_, o) => o && this._update('fontScale', o.key as number)}
             className={styles.field}
           />
 
@@ -153,6 +171,27 @@ export class SettingsPanel extends React.Component<ISettingsPanelProps, ISetting
             These preferences are saved to your browser and apply only to you.
             Chart theme, default view, and layout are configured by your SharePoint admin.
           </div>
+
+          {/* ── Demo data ── */}
+          {mockSize !== undefined && onMockSizeChange && (
+            <>
+              <Separator alignContent="start" className={styles.separator}>
+                <span className={styles.sectionLabel}>Demo Data</span>
+              </Separator>
+              <Label>Dataset size</Label>
+              <div className={styles.mockSizeBtns}>
+                {([150, 500, 1000] as const).map(s => (
+                  <button
+                    key={s}
+                    className={`${styles.mockSizeBtn}${mockSize === s ? ` ${styles.mockSizeBtnActive}` : ''}`}
+                    onClick={() => onMockSizeChange(s)}
+                  >
+                    {s.toLocaleString()} people
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </Panel>
     );

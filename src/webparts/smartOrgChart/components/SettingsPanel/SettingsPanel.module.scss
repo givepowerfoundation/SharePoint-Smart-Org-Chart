@@ -44,6 +44,36 @@
   line-height: 1.5;
 }
 
+/* ── Demo data ──────────────────────────── */
+
+.mockSizeBtns {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.mockSizeBtn {
+  padding: 6px 16px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #444;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+
+  &:hover { border-color: $ms-color-themePrimary; color: $ms-color-themePrimary; }
+}
+
+.mockSizeBtnActive {
+  border-color: $ms-color-themePrimary !important;
+  background: #eef4ff !important;
+  color: $ms-color-themePrimary !important;
+  font-weight: 600 !important;
+}
+
 /* ── Theme picker ───────────────────────── */
 
 .themeGrid {

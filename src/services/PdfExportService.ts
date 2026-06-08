@@ -62,6 +62,39 @@ tr.odd td { background: #f7f9fc; }
   openPrintWindow(html);
 }
 
+export function exportDirectoryToExcel(users: IGraphUser[], opts: IDirectoryExportOptions): void {
+  if (users.length === 0) return;
+
+  const cols: { label: string; get: (u: IGraphUser) => string }[] = [
+    { label: 'Name',      get: u => u.displayName || '' },
+    { label: 'Job Title', get: u => u.jobTitle || '' },
+  ];
+  if (opts.showDepartment) cols.push({ label: 'Department', get: u => u.department || '' });
+  if (opts.showOffice)     cols.push({ label: 'Office',     get: u => u.officeLocation || '' });
+  if (opts.showEmail)      cols.push({ label: 'Email',      get: u => u.mail || '' });
+  if (opts.showPhone)      cols.push({ label: 'Phone',      get: u => u.mobilePhone || (u.businessPhones && u.businessPhones[0]) || '' });
+
+  const csvRow = (cells: string[]): string =>
+    cells.map(c => `"${c.replace(/"/g, '""')}"`).join(',');
+
+  const lines = [
+    csvRow(cols.map(c => c.label)),
+    ...users.map(u => csvRow(cols.map(c => c.get(u)))),
+  ];
+
+  // UTF-8 BOM ensures Excel opens the file with correct character encoding
+  const csv = '﻿' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `employee-directory-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export function exportOrgChartToPdf(rootNode: IOrgNode): void {
   const lines: string[] = [];
 

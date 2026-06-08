@@ -5,4 +5,6 @@ export interface ISettingsPanelProps {
   settings: IUserSettings;
   onDismiss: () => void;
   onSave: (settings: IUserSettings) => void;
+  mockSize?: number;
+  onMockSizeChange?: (size: number) => void;
 }

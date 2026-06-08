@@ -1,5 +1,5 @@
 # Smart Org Chart — User Guide
-**Version 1.1.0**
+**Version 1.2.0**
 
 Smart Org Chart is a SharePoint web part that gives your organisation two complementary views of its people data: a searchable **Employee Directory** and an interactive **Org Chart**, both powered by Microsoft Graph.
 
@@ -44,8 +44,6 @@ The header bar is always visible at the top of the web part.
 | **View toggle** | Switches between Employee Directory and Org Chart |
 | **Export PDF** | Downloads the current view as a PDF |
 | **Settings gear** | Opens the [User Preferences](#6-user-preferences) panel |
-
-> **Demo mode banner:** When the web part is running on localhost or the admin has enabled *Use Demo Data*, a yellow banner appears below the header letting you switch between 150, 500, and 1,000 person sample datasets.
 
 ---
 
@@ -143,15 +141,16 @@ The toolbar appears above the chart and contains the following controls (some ma
 | **Search box** | Search all people in the org. A live dropdown shows up to 8 matching people; click a result to focus the chart on that person. In tree mode, matching cards are highlighted in the chart. |
 | **Expand All / Collapse All** | Available in tree modes only. Expand All loads and shows the entire organisation. |
 | **Find Me** | Centres the org chart on your own profile. |
-| **View** | Opens the layout picker to switch between Drill-Down, Vertical, and Horizontal. |
-| **Stats bar** (chart icon) | Toggles a summary bar showing total people, members, guests, departments, and average reporting span. |
+| **View from person…** | Type a name to temporarily re-root the chart at any person. The chart reloads from that person downward. Click the × to return to the default root. |
+| **View** | Opens the layout picker to switch between Drill-Down, Top Down, and Left to Right. |
+| **Stats bar** (chart icon) | Toggles a summary bar showing total people, members, guests, and departments. |
 | **Department filter** (tools icon) | Shows checkboxes to show only selected departments. A badge on the button shows how many filters are active. |
 | **User type filter** (funnel icon) | Toggles visibility of Regular members and Guest users. |
 | **Zoom controls** | Visible in tree modes only. Adjust the scale from 25% to 150%. |
 
 #### Stats bar
 
-![Stats bar showing 312 people, 290 members, 8 guests, 6 departments, 5.4 avg span](screenshots/10-orgchart-stats.png)
+![Stats bar showing 312 people, 290 members, 8 guests, 6 departments](screenshots/10-orgchart-stats.png)
 
 #### Department filter
 
@@ -190,6 +189,7 @@ Click the **gear icon** in the header bar to open the Preferences panel. All set
 |---|---|---|
 | **Alphabet Filter By** | First Name, Last Name | Which part of the name the A–Z bar filters on |
 | **Card Size** | Small, Medium, Large | Controls the size of employee cards |
+| **Font Size** | 75% – 175% | Scales all text in the web part. Useful for accessibility or high-density displays. |
 
 ### Cards & Fields
 
@@ -217,10 +217,16 @@ Click **Save** to apply changes. **Cancel** discards unsaved changes.
 
 ## 7. Exporting
 
+### Export to PDF
+
 Click the **Download** (↓) button in the header bar to export the current view to PDF.
 
 - **Directory:** exports all visible employee cards, respecting the current alphabet/search filter.
 - **Org Chart:** exports the currently visible chart tree.
+
+### Export Directory to CSV
+
+Click the **Export** button in the Employee Directory toolbar to download the current filtered list as a CSV file that opens directly in Excel. The exported columns match your visible field preferences (name, title, department, office, email, phone).
 
 ---
 
@@ -234,7 +240,6 @@ Open the SharePoint property pane (**Edit** → click the web part → pencil ic
 
 | Setting | Description |
 |---|---|
-| **Use Demo Data** | When on, replaces live Microsoft 365 data with sample employees. Useful for demos and testing. |
 | **Default View** | Which view opens when a user first loads the page (Employee Directory or Org Chart). Users can switch views and their choice is remembered. |
 
 ### Branding
@@ -249,7 +254,8 @@ Open the SharePoint property pane (**Edit** → click the web part → pencil ic
 | Setting | Options | Description |
 |---|---|---|
 | **Chart Theme** | Modern, Minimal, Corporate, Dark | Colour scheme for employee cards and the org chart |
-| **Default Org Chart Layout** | Drill-Down, Vertical, Horizontal | The layout shown when a user opens the chart for the first time. Their choice is remembered after that. |
+| **Default Font Size** | 75% – 175% | Starting text scale for all users. Users can override this in their own Preferences. |
+| **Default Org Chart Layout** | Drill-Down, Top Down, Left to Right | The layout shown when a user opens the chart for the first time. Their choice is remembered after that. |
 
 ### Data Source
 
@@ -269,11 +275,12 @@ These filters are applied globally — hidden users do not appear in the directo
 
 | Setting | Default | Description |
 |---|---|---|
-| **Exclude accounts** | _(empty)_ | Comma-separated words or patterns (case-insensitive). Any user whose display name, email, or UPN contains one of these is hidden. Useful for removing shared mailboxes (`noreply`) or service accounts (`svc-`). |
-| **Exclude room accounts by pattern** | _(empty)_ | Comma-separated patterns that identify meeting room mailboxes (e.g. `conf-, room-, mrm@`). Accounts matching these patterns are always hidden even if they have sign-in enabled. |
+| **Exclude accounts** | _(empty)_ | Comma-separated words or patterns (case-insensitive). Any user whose display name, email, or UPN contains one of these is hidden. Useful for removing shared mailboxes (`noreply`), service accounts (`svc-`), or room mailboxes (`conf-`). |
 | **Only show tenant users** | Off | When on, hides accounts whose email domain does not match your organisation's domain. Removes external gmail.com, hotmail.com, and other personal email accounts. |
 | **Hide Azure AD guest accounts** | **On** | Hides B2B guest accounts (users from other organisations invited to your tenant). |
 | **Hide disabled accounts** | **On** | Hides accounts with blocked sign-in — typically former employees or deactivated service accounts. Requires the Graph API data source. |
+| **Hide accounts without a job title** | Off | Hides any account that has no job title set in Azure AD. Useful for removing shared mailboxes and system accounts that don't have profile data. |
+| **Hide accounts without a department** | Off | Hides any account that has no department set in Azure AD. |
 
 > The **Hide disabled accounts** and **Hide guest accounts** filters are **on by default** for new web part instances.
 
@@ -283,6 +290,7 @@ These filters are applied globally — hidden users do not appear in the directo
 |---|---|
 | **Top-Level User** | UPN or email of the person at the root of the org chart (e.g. `ceo@company.com`). Required. |
 | **Levels to load below root** | How many hierarchy levels to fetch on initial load (1–8). Higher values load more data upfront; lower values are faster but require more click-through to explore deep branches. |
+| **Default Org Chart Zoom** | Starting zoom level for the org chart: Auto-fit (default), 50%, 75%, 100%, 125%, or 150%. When set to a fixed value, the chart opens at that zoom rather than fitting to the visible area. |
 
 ### Org Chart Features
 
@@ -301,6 +309,12 @@ These toggles show or hide individual toolbar buttons and features. Hide control
 | Setting | Description |
 |---|---|
 | **Max employees per page** | How many employee cards to show per page (10–200). |
+
+### Demo
+
+| Setting | Description |
+|---|---|
+| **Use Demo Data** | When on, replaces live Microsoft 365 data with sample employees. Useful for testing or demonstrations without real user data. The dataset size (150 / 500 / 1,000 people) can be changed from the Settings panel. |
 
 ---
 
@@ -322,8 +336,10 @@ The **Chart Theme** property controls the visual appearance of employee cards an
 ## 10. Tips
 
 - **Find someone fast:** Use the search box in the org chart toolbar — it searches across the entire organisation, not just the loaded levels.
+- **Explore a sub-tree:** Use **View from person…** in the org chart toolbar to temporarily re-root the chart at any person. Great for exploring a specific department or team without changing the admin configuration.
 - **See the whole org:** Click **Expand All** in the tree toolbar. The web part will load every level from Microsoft Graph and expand them automatically.
 - **Navigate deep hierarchies:** In drill-down mode, click through cards to explore; use the breadcrumb to jump back up without reloading the tree.
 - **Compare departments:** Use the department filter to isolate one or more teams in the org chart.
 - **Presence badges:** Presence status (green = Available, red = Busy, yellow = Away) updates every 60 seconds from Microsoft Teams.
-- **Hide room mailboxes:** If meeting rooms appear in the directory, add their naming pattern (e.g. `conf-`) to **Exclude room accounts by pattern** in the property pane.
+- **Export the directory:** Click **Export** in the directory toolbar to download the current filtered list as a CSV file for use in Excel.
+- **Hide room mailboxes:** If meeting rooms appear in the directory, add their naming pattern (e.g. `conf-`) to **Exclude accounts** in the property pane.

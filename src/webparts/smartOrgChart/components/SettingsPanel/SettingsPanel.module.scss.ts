@@ -1,19 +1,22 @@
 /* tslint:disable */
 require("./SettingsPanel.module.css");
 const styles = {
-  body: 'body_b87d44eb',
-  sectionLabel: 'sectionLabel_b87d44eb',
-  separator: 'separator_b87d44eb',
-  field: 'field_b87d44eb',
-  toggleGroup: 'toggleGroup_b87d44eb',
-  footer: 'footer_b87d44eb',
-  hint: 'hint_b87d44eb',
-  themeGrid: 'themeGrid_b87d44eb',
-  themeBtn: 'themeBtn_b87d44eb',
-  themeBtnActive: 'themeBtnActive_b87d44eb',
-  themeSwatch: 'themeSwatch_b87d44eb',
-  themeLabel: 'themeLabel_b87d44eb',
-  themeDesc: 'themeDesc_b87d44eb'
+  body: 'body_55da3675',
+  sectionLabel: 'sectionLabel_55da3675',
+  separator: 'separator_55da3675',
+  field: 'field_55da3675',
+  toggleGroup: 'toggleGroup_55da3675',
+  footer: 'footer_55da3675',
+  hint: 'hint_55da3675',
+  mockSizeBtns: 'mockSizeBtns_55da3675',
+  mockSizeBtn: 'mockSizeBtn_55da3675',
+  mockSizeBtnActive: 'mockSizeBtnActive_55da3675',
+  themeGrid: 'themeGrid_55da3675',
+  themeBtn: 'themeBtn_55da3675',
+  themeBtnActive: 'themeBtnActive_55da3675',
+  themeSwatch: 'themeSwatch_55da3675',
+  themeLabel: 'themeLabel_55da3675',
+  themeDesc: 'themeDesc_55da3675'
 };
 
 export default styles;

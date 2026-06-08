@@ -4,6 +4,28 @@ All notable changes to Smart Org Chart are documented here.
 
 ---
 
+## [1.2.0] — 2026-06-07
+
+### Added
+- **Export Employee Directory to CSV** — new Export button in the directory toolbar downloads the current filtered list as a UTF-8 CSV file (Excel-compatible). Exported columns match the user's visible field preferences (name, title, department, office, email, phone).
+- **"View from person…" root picker** — a new search field in the org chart toolbar lets any user temporarily re-root the chart at any person in the organization. A cancel button resets back to the admin-configured root.
+- **Configurable default org chart zoom** — new admin property pane setting (Default Org Chart Zoom). Options: Auto-fit (default), 50%, 75%, 100%, 125%, 150%. When a fixed zoom is set, the auto-fit behavior is suppressed.
+- **Configurable font size** — text scale can now be set both by the admin (Default Font Size, in the property pane Visual Style group) and by each user (Font Size, in the Settings panel). Options range from 75% to 175%.
+- **Demo dataset picker in Settings panel** — when Demo Data is enabled, the 150 / 500 / 1,000 person dataset size buttons are now accessible from the Settings panel (gear icon) instead of a banner below the header.
+
+### Changed
+- **Demo Data moved to its own property pane group** — the Use Demo Data toggle has moved from the General group to a dedicated Demo group at the bottom of the property pane.
+- **Layout names standardized** — the three org chart layouts are now named *Drill-Down*, *Top Down*, and *Left to Right* consistently across the toolbar, layout picker, and property pane.
+- **Page size control improved** — the Max employees per page slider in the property pane now includes a companion number input for precise values, in addition to the drag slider.
+- **Statistics based on all users** — the stats bar (Total, Members, Guests, Depts) now reflects all visible users in the directory rather than being derived by walking the currently-loaded tree nodes.
+- **Zoom level not persisted** — the org chart zoom level is no longer saved to the browser session. Each visit starts at the admin-configured zoom or auto-fit.
+
+### Removed
+- **"Avg span" removed from stats bar** — the average reporting span figure has been removed. The stats bar now shows Total, Members, Guests, and Depts.
+- **Demo data banner removed** — the banner that appeared below the header in demo mode has been removed; dataset size controls are now in the Settings panel.
+
+---
+
 ## [1.1.0] — 2026-06-02
 
 ### Changed

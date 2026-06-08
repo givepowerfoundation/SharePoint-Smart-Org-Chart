@@ -97,24 +97,17 @@ function getUniqueDepts(node: IOrgNode): Map<string, number> {
   return map;
 }
 
-function computeStats(node: IOrgNode, isVisible: (u: IGraphUser) => boolean): {
-  total: number; members: number; guests: number;
-  depts: number; avgSpan: number;
+function computeStats(users: IGraphUser[]): {
+  total: number; members: number; guests: number; depts: number;
 } {
-  let total = 0, members = 0, guests = 0, managerCount = 0, totalReports = 0;
+  let members = 0, guests = 0;
   const deptSet = new Set<string>();
-  const visit = (n: IOrgNode) => {
-    if (!isVisible(n.user)) return;
-    total++;
-    if (n.user.department) deptSet.add(n.user.department);
-    if (n.user.userType === 'Guest') guests++;
+  for (const u of users) {
+    if (u.department) deptSet.add(u.department);
+    if (u.userType === 'Guest') guests++;
     else members++;
-    const visReports = n.directReports.filter(c => isVisible(c.user));
-    if (visReports.length > 0) { managerCount++; totalReports += visReports.length; }
-    n.directReports.forEach(visit);
-  };
-  visit(node);
-  return { total, members, guests, depts: deptSet.size, avgSpan: managerCount ? Math.round(totalReports / managerCount * 10) / 10 : 0 };
+  }
+  return { total: users.length, members, guests, depts: deptSet.size };
 }
 
 /* ── Department color palettes & themes ──── */
@@ -603,6 +596,9 @@ interface IOrgChartLocalState extends IOrgChartState {
   drillLoadingId: string | null;
   drillReportCounts: Map<string, number>;
   showLayoutPicker: boolean;
+  rootPickerQuery: string;
+  rootPickerResults: IGraphUser[];
+  runtimeRootUser: IGraphUser | null;
 }
 
 /* ── Chart state persistence ─────────────── */
@@ -615,7 +611,6 @@ interface IChartStoredState {
   filterMembers?: boolean;
   filterGuests?: boolean;
   filterDepartments?: string[];
-  zoomLevel?: number;
   focusEmail?: string | null;
 }
 
@@ -640,9 +635,9 @@ const LAYOUT_ICON: Record<ChartLayout, string> = {
 };
 
 const LAYOUT_TITLE: Record<ChartLayout, string> = {
-  drill:      'Drill-down',
-  vertical:   'Top-down tree',
-  horizontal: 'Left-right tree',
+  drill:      'Drill-Down',
+  vertical:   'Top Down',
+  horizontal: 'Left to Right',
 };
 
 export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalState> {
@@ -660,6 +655,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
   private _scrollStartY     = 0;
   private _panDistance      = 0;
   private _lastPanEndTime   = 0;
+  private _rootPickerRef    = React.createRef<HTMLDivElement>();
 
   constructor(props: IOrgChartProps) {
     super(props);
@@ -668,7 +664,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     this.state = {
       rootNode: null, isLoading: false, error: null,
       photos: {}, expandingNodes: new Set(), searchQuery: '',
-      presenceMap: new Map(), zoomLevel: stored.zoomLevel ?? 1,
+      presenceMap: new Map(), zoomLevel: props.defaultZoom > 0 ? props.defaultZoom : 1,
       selectedUser: null,
       showFilters: false,
       filterMembers: stored.filterMembers ?? true,
@@ -683,6 +679,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       drillPath: [], drillReports: [], drillLoadingId: null,
       drillReportCounts: new Map(),
       showLayoutPicker: false,
+      rootPickerQuery: '', rootPickerResults: [], runtimeRootUser: null,
     };
   }
 
@@ -719,14 +716,13 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     }
 
     const { isLoading, chartLayout, showStats, filterMembers, filterGuests,
-            filterDepartments, zoomLevel, drillPath, focusedUser } = this.state;
+            filterDepartments, drillPath, focusedUser } = this.state;
     if (!isLoading && (
       prevState.chartLayout       !== chartLayout       ||
       prevState.showStats         !== showStats         ||
       prevState.filterMembers     !== filterMembers     ||
       prevState.filterGuests      !== filterGuests      ||
       prevState.filterDepartments !== filterDepartments ||
-      prevState.zoomLevel         !== zoomLevel         ||
       prevState.drillPath         !== drillPath         ||
       prevState.focusedUser       !== focusedUser
     )) {
@@ -736,7 +732,6 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       saveChartState({
         chartLayout, showStats, filterMembers, filterGuests,
         filterDepartments: Array.from(filterDepartments),
-        zoomLevel,
         focusEmail,
       });
     }
@@ -754,6 +749,9 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
   private _handleOutsideClick = (e: MouseEvent): void => {
     if (this._searchRef.current && !this._searchRef.current.contains(e.target as Node)) {
       if (this.state.showSearchResults) this.setState({ showSearchResults: false });
+    }
+    if (this._rootPickerRef.current && !this._rootPickerRef.current.contains(e.target as Node)) {
+      if (this.state.rootPickerResults.length > 0) this.setState({ rootPickerResults: [] });
     }
   }
 
@@ -828,6 +826,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
   }
 
   private _autoFitZoom(): void {
+    if (this.props.defaultZoom > 0) return; // fixed zoom configured — don't override
     requestAnimationFrame(() => {
       const container = this._scrollRef.current;
       if (!container || !this._mounted) return;
@@ -1134,6 +1133,51 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     }
   }
 
+  /* ── Root picker ── */
+
+  private _onRootPickerChange = (query: string): void => {
+    const { allUsers } = this.state;
+    if (!query.trim()) {
+      this.setState({ rootPickerQuery: query, rootPickerResults: [] });
+      return;
+    }
+    const q = query.toLowerCase();
+    const results = allUsers.filter(u =>
+      (u.displayName || '').toLowerCase().includes(q) ||
+      (u.mail || '').toLowerCase().includes(q)
+    ).slice(0, 8);
+    this.setState({ rootPickerQuery: query, rootPickerResults: results });
+  }
+
+  private _onRootPickerSelect = async (user: IGraphUser): Promise<void> => {
+    const { graphService, levelsBelow } = this.props;
+    if (!graphService) return;
+    this.setState({ rootPickerQuery: '', rootPickerResults: [], runtimeRootUser: user, isLoading: true });
+    try {
+      const rawRoot = await graphService.buildOrgTree(user.id, levelsBelow);
+      const rootNode = expandLoaded(rawRoot);
+      const drillPath = [user];
+      const drillReports = rootNode.directReports.map(n => n.user);
+      if (this._mounted) {
+        this._requestedReportCounts.clear();
+        this.setState({
+          rootNode, drillPath, drillReports, drillLoadingId: null,
+          isLoading: false, focusedUser: null, ancestorChain: [], error: null,
+        }, () => { this._autoFitZoom(); });
+        this._loadPhotosForTree(rootNode);
+        this._checkFrontierNodes(rootNode);
+        this._loadDrillReportCounts(drillReports);
+      }
+    } catch {
+      if (this._mounted) this.setState({ isLoading: false, error: 'Failed to load org chart for this person.' });
+    }
+  }
+
+  private _resetRoot = (): void => {
+    this.setState({ runtimeRootUser: null, rootPickerQuery: '', rootPickerResults: [] });
+    this._loadTree();
+  }
+
   /* ── Layout picker ── */
 
   private _setLayout = (layout: ChartLayout): void => {
@@ -1401,16 +1445,31 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
 
   private _renderNoConfig(): React.ReactElement {
     return (
-      <NoConfigForm onLoad={identifier => {
+      <NoConfigForm onLoad={async (identifier) => {
         const gs = this.props.graphService;
         if (!gs) return;
         this.setState({ isLoading: true, error: null });
-        gs.findUser(identifier).then(user => {
-          if (!user) { if (this._mounted) this.setState({ isLoading: false, error: `User "${identifier}" not found.` }); return; }
-          gs.buildOrgTree(user.id, this.props.levelsBelow).then(rootNode => {
-            if (this._mounted) { this.setState({ rootNode, isLoading: false }); this._loadPhotosForTree(rootNode); }
-          }).catch(() => { if (this._mounted) this.setState({ isLoading: false, error: 'Failed to load org chart.' }); });
-        }).catch(() => { if (this._mounted) this.setState({ isLoading: false, error: 'Failed to search for user.' }); });
+        try {
+          const user = await gs.findUser(identifier);
+          if (!user) {
+            if (this._mounted) this.setState({ isLoading: false, error: `User "${identifier}" not found.` });
+            return;
+          }
+          const [rawRoot, allUsers] = await Promise.all([
+            gs.buildOrgTree(user.id, this.props.levelsBelow),
+            gs.getAllUsers().catch(() => [] as IGraphUser[]),
+          ]);
+          if (this._mounted) {
+            const rootNode = expandLoaded(rawRoot);
+            const drillPath = [user];
+            const drillReports = rootNode.directReports.map(n => n.user);
+            this.setState({ rootNode, allUsers, drillPath, drillReports, isLoading: false });
+            this._loadPhotosForTree(rootNode);
+            this._loadDrillReportCounts(drillReports);
+          }
+        } catch {
+          if (this._mounted) this.setState({ isLoading: false, error: 'Failed to load org chart.' });
+        }
       }} />
     );
   }
@@ -1425,6 +1484,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       focusedUser, ancestorChain, allUsers, showSearchResults,
       personCardManagerChain, chartLayout, findMeError,
       filterDepartments, showDeptFilter, showStats, showLayoutPicker,
+      rootPickerQuery, rootPickerResults, runtimeRootUser,
     } = this.state;
     const { showDepartment, theme, currentUserEmail, compactCards,
       enableFindMe, enableLayoutToggle, enableStats, enableDeptFilter, enableUserFilter } = this.props;
@@ -1449,7 +1509,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     const matchCount   = lowerQ ? countSearchMatches(rootNode, lowerQ, isVisible) : 0;
     const activeFilters = (!filterMembers ? 1 : 0) + (!filterGuests ? 1 : 0);
     const uniqueDepts  = getUniqueDepts(rootNode);
-    const stats        = showStats ? computeStats(rootNode, isVisible) : null;
+    const stats        = showStats ? computeStats(allUsers) : null;
     const isDrillMode  = chartLayout === 'drill';
 
     const searchResults = lowerQ && allUsers.length > 0
@@ -1656,6 +1716,55 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
             </div>
           )}
 
+          {/* Root picker — "View from person…" */}
+          <div className={styles.rootPickerWrapper} ref={this._rootPickerRef}>
+            {runtimeRootUser ? (
+              <div className={styles.rootPickerActive}>
+                <Icon iconName="Org" className={styles.rootPickerIcon} />
+                <span className={styles.rootPickerActiveName}>{runtimeRootUser.displayName}</span>
+                <button
+                  className={styles.rootPickerReset}
+                  onClick={this._resetRoot}
+                  title="Reset to default root"
+                >
+                  <Icon iconName="Cancel" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className={styles.rootPickerInputWrap}>
+                  <Icon iconName="Org" className={styles.rootPickerIcon} />
+                  <input
+                    type="text"
+                    className={styles.rootPickerInput}
+                    placeholder="View from person…"
+                    value={rootPickerQuery}
+                    onChange={e => this._onRootPickerChange(e.target.value)}
+                  />
+                </div>
+                {rootPickerResults.length > 0 && (
+                  <div className={styles.rootPickerDropdown}>
+                    {rootPickerResults.map(u => (
+                      <button
+                        key={u.id}
+                        className={styles.rootPickerOption}
+                        onClick={() => this._onRootPickerSelect(u)}
+                      >
+                        <span className={styles.rootPickerOptionInitials} style={{ background: getSiteColor(theme) }}>
+                          {getInitials(u.displayName)}
+                        </span>
+                        <span className={styles.rootPickerOptionInfo}>
+                          <span className={styles.rootPickerOptionName}>{u.displayName}</span>
+                          {u.jobTitle && <span className={styles.rootPickerOptionMeta}>{u.jobTitle}</span>}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           {/* Zoom — only in full-tree mode */}
           {!isDrillMode && (
             <div className={styles.zoomControls}>
@@ -1663,7 +1772,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
                 <Icon iconName="Remove" />
               </button>
               <span className={styles.zoomLabel}>{Math.round(zoomLevel * 100)}%</span>
-              <button className={styles.zoomBtn} onClick={() => this.setState({ zoomLevel: Math.min(1.5, zoomLevel + 0.1) })} title="Zoom in" disabled={zoomLevel >= 1.5}>
+              <button className={styles.zoomBtn} onClick={() => { const next = Math.min(1.5, zoomLevel + 0.1); this.setState({ zoomLevel: zoomLevel < 1 && next > 1 ? 1 : next }); }} title="Zoom in" disabled={zoomLevel >= 1.5}>
                 <Icon iconName="Add" />
               </button>
               <button className={styles.zoomBtn} onClick={() => this.setState({ zoomLevel: 1 })} title="Reset zoom" disabled={zoomLevel === 1}>
@@ -1685,7 +1794,6 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
             <div className={styles.statItem}><span className={styles.statValue}>{stats.members}</span><span className={styles.statLabel}>Members</span></div>
             {stats.guests > 0 && <div className={styles.statItem}><span className={styles.statValue}>{stats.guests}</span><span className={styles.statLabel}>Guests</span></div>}
             <div className={styles.statItem}><span className={styles.statValue}>{stats.depts}</span><span className={styles.statLabel}>Depts</span></div>
-            <div className={styles.statItem}><span className={styles.statValue}>{stats.avgSpan}</span><span className={styles.statLabel}>Avg span</span></div>
           </div>
         )}
 

@@ -4,7 +4,11 @@ import { Version } from '@microsoft/sp-core-library';
 import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
 import {
   IPropertyPaneConfiguration,
+  IPropertyPaneCustomFieldProps,
+  IPropertyPaneField,
+  PropertyPaneFieldType,
   PropertyPaneTextField,
+  PropertyPaneDropdown,
   PropertyPaneSlider,
   PropertyPaneToggle,
   PropertyPaneChoiceGroup,
@@ -32,6 +36,8 @@ export interface ISmartOrgChartWebPartProps {
   enableStats: boolean;
   enableDeptFilter: boolean;
   enableUserFilter: boolean;
+  defaultZoom: number;
+  defaultFontScale: number;
   // Data
   dataSource: 'auto' | 'graph' | 'search';
   // User filters
@@ -55,6 +61,8 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
     // Visual style defaults
     if (p.theme         === undefined) p.theme         = 'modern';
     if (p.defaultLayout === undefined) p.defaultLayout = 'drill';
+    if (p.defaultZoom      === undefined) p.defaultZoom      = 0;
+    if (p.defaultFontScale === undefined) p.defaultFontScale = 1;
     // Branding defaults
     if (p.companyName === undefined) p.companyName = '';
     if (p.logoUrl     === undefined) p.logoUrl     = '';
@@ -82,6 +90,8 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
       logoUrl: this.properties.logoUrl || '',
       theme: this.properties.theme || 'modern',
       defaultLayout: this.properties.defaultLayout || 'drill',
+      defaultZoom: this.properties.defaultZoom ?? 0,
+      defaultFontScale: this.properties.defaultFontScale || 1,
       enableFindMe: this.properties.enableFindMe !== false,
       enableLayoutToggle: this.properties.enableLayoutToggle !== false,
       enableStats: this.properties.enableStats !== false,
@@ -119,12 +129,6 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
             {
               groupName: 'General',
               groupFields: [
-                PropertyPaneToggle('useDemoData', {
-                  label: 'Use Demo Data',
-                  onText: 'On — showing 125 sample employees',
-                  offText: 'Off — live Microsoft 365 data',
-                  checked: false
-                }),
                 PropertyPaneChoiceGroup('defaultView', {
                   label: 'Default View',
                   options: [
@@ -161,12 +165,25 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
                     { key: 'dark',      text: 'Dark — dark navy background',     iconProps: { officeFabricIconFontName: 'ClearNight' } },
                   ]
                 }),
+                PropertyPaneDropdown('defaultFontScale', {
+                  label: 'Default Font Size',
+                  options: [
+                    { key: 0.75, text: '75% — Extra Small' },
+                    { key: 0.85, text: '85% — Small' },
+                    { key: 1,    text: '100% — Normal' },
+                    { key: 1.15, text: '115% — Large' },
+                    { key: 1.3,  text: '130% — Extra Large' },
+                    { key: 1.5,  text: '150% — XXL' },
+                    { key: 1.75, text: '175% — XXXL' },
+                  ],
+                  selectedKey: this.properties.defaultFontScale || 1,
+                }),
                 PropertyPaneChoiceGroup('defaultLayout', {
                   label: 'Default Org Chart Layout',
                   options: [
-                    { key: 'drill',      text: 'Drill-Down (recommended)',  iconProps: { officeFabricIconFontName: 'Org' } },
-                    { key: 'vertical',   text: 'Vertical Tree',             iconProps: { officeFabricIconFontName: 'ArrowUpRight' } },
-                    { key: 'horizontal', text: 'Horizontal Tree',           iconProps: { officeFabricIconFontName: 'ArrowDownRight' } },
+                    { key: 'drill',      text: 'Drill-Down',    iconProps: { officeFabricIconFontName: 'Org' } },
+                    { key: 'vertical',   text: 'Top Down',      iconProps: { officeFabricIconFontName: 'Down' } },
+                    { key: 'horizontal', text: 'Left to Right', iconProps: { officeFabricIconFontName: 'Forward' } },
                   ]
                 }),
               ]
@@ -251,6 +268,18 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
                   value: 3,
                   showValue: true,
                   step: 1
+                }),
+                PropertyPaneDropdown('defaultZoom', {
+                  label: 'Default Org Chart Zoom',
+                  options: [
+                    { key: 0,    text: 'Default (Auto-fit)' },
+                    { key: 0.5,  text: '50%' },
+                    { key: 0.75, text: '75%' },
+                    { key: 1,    text: '100%' },
+                    { key: 1.25, text: '125%' },
+                    { key: 1.5,  text: '150%' },
+                  ],
+                  selectedKey: this.properties.defaultZoom ?? 0,
                 })
               ]
             },
@@ -290,17 +319,69 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
             {
               groupName: 'Directory',
               groupFields: [
-                PropertyPaneSlider('pageSize', {
-                  label: 'Max employees per page',
-                  min: 10,
-                  max: 200,
-                  value: 50,
-                  step: 10,
-                  showValue: true
-                }),
+                ({
+                  type: PropertyPaneFieldType.Custom,
+                  targetProperty: 'pageSize',
+                  properties: {
+                    key: 'pageSizeField',
+                    onRender: (elem: HTMLElement, _ctx: any, changeCallback: ((targetProperty?: string, newValue?: any) => void) | undefined) => {
+                    elem.innerHTML = '';
+                    const current = this.properties.pageSize || 50;
+
+                    const label = document.createElement('label');
+                    label.textContent = 'Max employees per page';
+                    label.style.cssText = 'display:block;font-weight:600;font-size:14px;color:#323130;margin-bottom:8px;';
+
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;align-items:center;gap:12px;';
+
+                    const slider = document.createElement('input');
+                    slider.type = 'range';
+                    slider.min = '10';
+                    slider.max = '200';
+                    slider.step = '1';
+                    slider.value = String(current);
+                    slider.style.cssText = 'flex:1;accent-color:#0078d4;';
+
+                    const numInput = document.createElement('input');
+                    numInput.type = 'number';
+                    numInput.min = '10';
+                    numInput.max = '200';
+                    numInput.value = String(current);
+                    numInput.style.cssText = 'width:64px;padding:4px 6px;border:1px solid #c8c6c4;border-radius:2px;font-size:14px;text-align:center;';
+
+                    const sync = (val: number): void => {
+                      const v = Math.max(10, Math.min(200, isNaN(val) ? 50 : val));
+                      slider.value = String(v);
+                      numInput.value = String(v);
+                      if (changeCallback) changeCallback('pageSize', v);
+                    };
+
+                    slider.addEventListener('input', () => sync(parseInt(slider.value, 10)));
+                    numInput.addEventListener('change', () => sync(parseInt(numInput.value, 10)));
+
+                    row.appendChild(slider);
+                    row.appendChild(numInput);
+                    elem.appendChild(label);
+                    elem.appendChild(row);
+                  },
+                    onDispose: (elem: HTMLElement) => { elem.innerHTML = ''; }
+                  }
+                } as IPropertyPaneField<IPropertyPaneCustomFieldProps>),
                 PropertyPaneLabel('pageSize', {
                   text: 'Card size, visible fields, and other display preferences are set per-user via the Settings gear in the app.'
                 })
+              ]
+            },
+            {
+              groupName: 'Demo',
+              groupFields: [
+                PropertyPaneToggle('useDemoData', {
+                  label: 'Use Demo Data',
+                  onText: 'On — showing sample employees',
+                  offText: 'Off — live Microsoft 365 data',
+                  checked: false
+                }),
               ]
             }
           ]

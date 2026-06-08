@@ -19,6 +19,7 @@ export interface IOrgChartProps {
   enableStats: boolean;
   enableDeptFilter: boolean;
   enableUserFilter: boolean;
+  defaultZoom: number;
 }
 
 export interface IOrgChartState {
