@@ -20,6 +20,8 @@ export interface IOrgChartProps {
   enableDeptFilter: boolean;
   enableUserFilter: boolean;
   defaultZoom: number;
+  /** Web part instance ID — scopes localStorage state so instances on different pages don't clash */
+  instanceId: string;
 }
 
 export interface IOrgChartState {

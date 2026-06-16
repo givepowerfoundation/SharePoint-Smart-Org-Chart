@@ -5,8 +5,9 @@ import { TextField } from '@fluentui/react/lib/TextField';
 import { SearchBox } from '@fluentui/react/lib/SearchBox';
 import { PrimaryButton, DefaultButton } from '@fluentui/react/lib/Button';
 import { IGraphUser, IOrgNode, PresenceAvailability } from '../../../../services/GraphService';
-import { exportOrgChartToPdf } from '../../../../services/PdfExportService';
+import { exportOrgChartToPdf, exportOrgChartToCsv } from '../../../../services/PdfExportService';
 import { IOrgChartProps, IOrgChartState } from './IOrgChartProps';
+import { PRESENCE_COLOR, PRESENCE_LABEL, getInitials } from '../personUtils';
 import styles from './OrgChart.module.scss';
 
 /* ── Tree mutation helpers ───────────────── */
@@ -31,6 +32,33 @@ function collapseAll(node: IOrgNode): IOrgNode {
 
 function expandLoaded(node: IOrgNode): IOrgNode {
   return { ...node, isExpanded: node.directReports.length > 0, directReports: node.directReports.map(expandLoaded) };
+}
+
+// Expands every ancestor of a node matching the query so search hits inside
+// collapsed branches become visible. Only already-loaded nodes are affected.
+function expandToMatches(node: IOrgNode, lowerQ: string): { node: IOrgNode; hasMatch: boolean } {
+  const children = node.directReports.map(c => expandToMatches(c, lowerQ));
+  const childMatch = children.some(c => c.hasMatch);
+  return {
+    node: { ...node, directReports: children.map(c => c.node), isExpanded: node.isExpanded || childMatch },
+    hasMatch: childMatch || matchesQuery(node, lowerQ),
+  };
+}
+
+// Returns true if this node or any descendant passes the visibility filter.
+// Used so ancestor nodes stay visible when a dept filter is active.
+function subtreeHasVisible(node: IOrgNode, isVisible: (u: IGraphUser) => boolean): boolean {
+  if (isVisible(node.user)) return true;
+  return node.directReports.some(c => subtreeHasVisible(c, isVisible));
+}
+
+// Prunes users hidden by the active filters (mirrors what OrgTree renders)
+function filterTreeForExport(node: IOrgNode, isVisible: (u: IGraphUser) => boolean): IOrgNode | null {
+  if (!isVisible(node.user)) return null;
+  const directReports = node.directReports
+    .map(c => filterTreeForExport(c, isVisible))
+    .filter((c): c is IOrgNode => c !== null);
+  return { ...node, directReports };
 }
 
 function markNodeLoaded(root: IOrgNode, targetId: string): IOrgNode {
@@ -78,13 +106,6 @@ function countTreeUsers(node: IOrgNode): { members: number; guests: number; disa
   return c;
 }
 
-
-function getInitials(displayName: string): string {
-  const parts = (displayName || '').split(' ').filter(p => p.length > 0);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0][0].toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
 
 function getUniqueDepts(node: IOrgNode): Map<string, number> {
   const map = new Map<string, number>();
@@ -135,19 +156,9 @@ const THEME_CONTAINER_CLASS: Record<OrgChartTheme, string> = {
 
 /* ── Presence helpers ────────────────────── */
 
-const PRESENCE_COLOUR: Record<PresenceAvailability, string> = {
-  Available: '#6BB700', Busy: '#C50F1F', DoNotDisturb: '#C50F1F',
-  BeRightBack: '#FFAA44', Away: '#FFAA44', Offline: '#8A8886', Unknown: '#8A8886',
-};
-
-const PRESENCE_LABEL: Record<PresenceAvailability, string> = {
-  Available: 'Available', Busy: 'Busy', DoNotDisturb: 'Do Not Disturb',
-  BeRightBack: 'Be Right Back', Away: 'Away', Offline: 'Offline', Unknown: '',
-};
-
 const PresenceDot: React.FC<{ status: PresenceAvailability | undefined }> = ({ status }) => {
   if (!status || status === 'Unknown') return null;
-  return <span className={styles.presenceDot} style={{ background: PRESENCE_COLOUR[status] }} />;
+  return <span className={styles.presenceDot} style={{ background: PRESENCE_COLOR[status] }} />;
 };
 
 /* ── Person Card (Outlook-style popup) ───── */
@@ -158,16 +169,37 @@ interface IPersonCardProps {
   presence: PresenceAvailability | undefined;
   theme: OrgChartTheme;
   managerChain: IGraphUser[];
+  dottedManager: IGraphUser | null;
+  dottedReports: IGraphUser[];
   onClose: () => void;
   onFocus: (user: IGraphUser) => void;
 }
 
-const PersonCard: React.FC<IPersonCardProps> = ({ user, photo, presence, theme, managerChain, onClose, onFocus }) => {
+const PersonCard: React.FC<IPersonCardProps> = ({
+  user, photo, presence, theme, managerChain, dottedManager, dottedReports, onClose, onFocus
+}) => {
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Transient "Copied!" feedback for the copy buttons
+  const mountedRef = React.useRef(true);
+  React.useEffect(() => () => { mountedRef.current = false; }, []);
+  const [copied, setCopied] = React.useState('');
+  const copy = (text: string, label: string): void => {
+    const done = (): void => {
+      if (!mountedRef.current) return;
+      setCopied(label);
+      window.setTimeout(() => { if (mountedRef.current) setCopied(''); }, 2000);
+    };
+    try { navigator.clipboard.writeText(text).then(done).catch(done); } catch { done(); }
+  };
+
   const deptColor = getSiteColor(theme);
   const isDark = theme === 'dark';
   const initials = getInitials(user.displayName);
-  const phone = user.mobilePhone || (user.businessPhones && user.businessPhones[0]) || '';
-  const hasPhone = !!phone;
   const isDisabled = user.accountEnabled === false;
   const isGuest = user.userType === 'Guest';
 
@@ -196,7 +228,7 @@ const PersonCard: React.FC<IPersonCardProps> = ({ user, photo, presence, theme, 
           }
           {presence && presence !== 'Unknown' && (
             <div className={styles.personCardPresence}>
-              <span className={styles.personCardPresenceDot} style={{ background: PRESENCE_COLOUR[presence] }} />
+              <span className={styles.personCardPresenceDot} style={{ background: PRESENCE_COLOR[presence] }} />
               <span>{PRESENCE_LABEL[presence]}</span>
             </div>
           )}
@@ -226,6 +258,13 @@ const PersonCard: React.FC<IPersonCardProps> = ({ user, photo, presence, theme, 
               <div className={styles.personCardField}>
                 <Icon iconName="Mail" className={styles.personCardFieldIcon} style={{ color: deptColor }} />
                 <a href={`mailto:${user.mail}`} className={styles.personCardFieldLink} style={{ color: deptColor }}>{user.mail}</a>
+                <button
+                  onClick={() => copy(user.mail, 'email')}
+                  title="Copy email address"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: subColor, padding: '2px 4px' }}
+                >
+                  <Icon iconName={copied === 'email' ? 'CheckMark' : 'Copy'} />
+                </button>
               </div>
             )}
             {user.businessPhones && user.businessPhones[0] && (
@@ -277,6 +316,44 @@ const PersonCard: React.FC<IPersonCardProps> = ({ user, photo, presence, theme, 
             </div>
           )}
 
+          {/* Dotted-line relationships */}
+          {(dottedManager || dottedReports.length > 0) && (
+            <div className={styles.personCardChain} style={{ background: chainBg, borderColor: borderClr }}>
+              <div className={styles.personCardChainLabel} style={{ color: subColor }}>Dotted line</div>
+              <div className={styles.personCardChainItems}>
+                {dottedManager && (
+                  <button
+                    className={styles.personCardChainChip}
+                    onClick={() => { onClose(); onFocus(dottedManager); }}
+                    title={`Dotted-line manager: ${dottedManager.displayName}`}
+                  >
+                    <span className={styles.personCardChainInitials} style={{ background: getSiteColor(theme) }}>
+                      {getInitials(dottedManager.displayName)}
+                    </span>
+                    <span className={styles.personCardChainName} style={{ color: textColor }}>
+                      ↑ {dottedManager.displayName.split(' ')[0]}
+                    </span>
+                  </button>
+                )}
+                {dottedReports.map(rep => (
+                  <button
+                    key={rep.id}
+                    className={styles.personCardChainChip}
+                    onClick={() => { onClose(); onFocus(rep); }}
+                    title={`Dotted-line report: ${rep.displayName}`}
+                  >
+                    <span className={styles.personCardChainInitials} style={{ background: getSiteColor(theme) }}>
+                      {getInitials(rep.displayName)}
+                    </span>
+                    <span className={styles.personCardChainName} style={{ color: textColor }}>
+                      ↓ {rep.displayName.split(' ')[0]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Action buttons */}
           {user.mail && (
             <div className={styles.personCardActions}>
@@ -295,15 +372,6 @@ const PersonCard: React.FC<IPersonCardProps> = ({ user, photo, presence, theme, 
               >
                 <Icon iconName="Mail" />&nbsp;Email
               </a>
-              {hasPhone && (
-                <a
-                  href={`tel:${phone}`}
-                  className={styles.personCardAction}
-                  style={{ background: isDark ? '#3a3d5c' : '#eef0f4', color: isDark ? '#e0e0f0' : '#333' }}
-                >
-                  <Icon iconName="Phone" />&nbsp;Call
-                </a>
-              )}
               <button
                 className={styles.personCardAction}
                 style={{ background: isDark ? '#3a3d5c' : '#eef0f4', color: isDark ? '#e0e0f0' : '#333', border: 'none', cursor: 'pointer' }}
@@ -402,6 +470,10 @@ const OrgNodeCard: React.FC<IOrgNodeCardProps> = ({
       style={{ ...borderStyle, cursor: 'pointer', position: 'relative' }}
       title={`View ${user.displayName}'s profile`}
       onClick={() => onCardClick(user)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCardClick(user); } }}
+      role="button"
+      tabIndex={0}
+      aria-label={`View ${user.displayName}'s profile`}
     >
       {/* Focus button — shown on hover */}
       <button
@@ -494,9 +566,9 @@ const OrgTree: React.FC<IOrgTreeProps> = ({
   expandingNodes, searchQuery, theme, isVisible, parentUser, compactCards,
   onToggle, onCardClick, onFocus
 }) => {
-  if (!isVisible(node.user)) return null;
+  if (!subtreeHasVisible(node, isVisible)) return null;
 
-  const visibleReports     = node.directReports.filter(c => isVisible(c.user));
+  const visibleReports     = node.directReports.filter(c => subtreeHasVisible(c, isVisible));
   const hasVisibleChildren = node.isExpanded && visibleReports.length > 0;
 
   return (
@@ -582,6 +654,8 @@ interface IOrgChartLocalState extends IOrgChartState {
   allUsers: IGraphUser[];
   showSearchResults: boolean;
   personCardManagerChain: IGraphUser[];
+  personCardDottedManager: IGraphUser | null;
+  personCardDottedReports: IGraphUser[];
   // Layout
   chartLayout: ChartLayout;
   // Find Me feedback
@@ -614,16 +688,42 @@ interface IChartStoredState {
   focusEmail?: string | null;
 }
 
-function loadChartState(): IChartStoredState {
+// Storage is scoped per web part instance — all SharePoint sites share one
+// origin, so a bare key would leak state between instances on different pages.
+// The un-scoped legacy key is read as a migration fallback.
+function chartStateKey(instanceId: string): string {
+  return instanceId ? `${LS_CHART_KEY}_${instanceId}` : LS_CHART_KEY;
+}
+
+function loadChartState(instanceId: string): IChartStoredState {
   try {
-    const s = localStorage.getItem(LS_CHART_KEY);
+    const s = localStorage.getItem(chartStateKey(instanceId)) ?? localStorage.getItem(LS_CHART_KEY);
     if (s) return JSON.parse(s) as IChartStoredState;
   } catch { /* ignore */ }
   return {};
 }
 
-function saveChartState(s: IChartStoredState): void {
-  try { localStorage.setItem(LS_CHART_KEY, JSON.stringify(s)); } catch { /* ignore */ }
+function saveChartState(instanceId: string, s: IChartStoredState): void {
+  try { localStorage.setItem(chartStateKey(instanceId), JSON.stringify(s)); } catch { /* ignore */ }
+}
+
+/* ── Deep links (?socFocus=email) ────────── */
+
+const FOCUS_URL_PARAM = 'socFocus';
+
+function readUrlFocus(): string | null {
+  try { return new URLSearchParams(window.location.search).get(FOCUS_URL_PARAM); } catch { return null; }
+}
+
+
+function updateUrlFocus(email: string | null): void {
+  try {
+    const url = new URL(window.location.href);
+    if ((email || null) === url.searchParams.get(FOCUS_URL_PARAM)) return;
+    if (email) url.searchParams.set(FOCUS_URL_PARAM, email);
+    else url.searchParams.delete(FOCUS_URL_PARAM);
+    window.history.replaceState(null, '', url.toString());
+  } catch { /* ignore */ }
 }
 
 const LAYOUT_CYCLE: ChartLayout[] = ['drill', 'vertical', 'horizontal'];
@@ -659,23 +759,30 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
 
   constructor(props: IOrgChartProps) {
     super(props);
-    const stored = loadChartState();
-    this._pendingFocusEmail = stored.focusEmail ?? null;
+    const stored = loadChartState(props.instanceId);
+    // A shared deep link takes precedence over the user's own saved position
+    this._pendingFocusEmail = readUrlFocus() || stored.focusEmail || null;
+    // Stored preferences only apply while the admin has the matching control
+    // enabled — otherwise users could be stuck in a state they can't change.
     this.state = {
       rootNode: null, isLoading: false, error: null,
       photos: {}, expandingNodes: new Set(), searchQuery: '',
       presenceMap: new Map(), zoomLevel: props.defaultZoom > 0 ? props.defaultZoom : 1,
       selectedUser: null,
       showFilters: false,
-      filterMembers: stored.filterMembers ?? true,
-      filterGuests: stored.filterGuests ?? true,
+      filterMembers: props.enableUserFilter ? (stored.filterMembers ?? true) : true,
+      filterGuests: props.enableUserFilter ? (stored.filterGuests ?? true) : true,
       isDragging: false,
       focusedUser: null, ancestorChain: [], allUsers: [],
       showSearchResults: false, personCardManagerChain: [],
-      chartLayout: stored.chartLayout ?? (props.defaultLayout || 'drill'),
+      personCardDottedManager: null, personCardDottedReports: [],
+      chartLayout: props.enableLayoutToggle
+        ? (stored.chartLayout ?? (props.defaultLayout || 'drill'))
+        : (props.defaultLayout || 'drill'),
       findMeError: '',
-      filterDepartments: new Set(stored.filterDepartments ?? []), showDeptFilter: false,
-      showStats: stored.showStats ?? false,
+      filterDepartments: props.enableDeptFilter ? new Set(stored.filterDepartments ?? []) : new Set(),
+      showDeptFilter: false,
+      showStats: props.enableStats ? (stored.showStats ?? false) : false,
       drillPath: [], drillReports: [], drillLoadingId: null,
       drillReportCounts: new Map(),
       showLayoutPicker: false,
@@ -711,7 +818,14 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       if (this.props.graphService && this.props.topLevelUser) await this._loadTree();
     }
 
-    if (prevState.rootNode !== this.state.rootNode) {
+    if (
+      prevState.rootNode          !== this.state.rootNode          ||
+      prevState.filterDepartments !== this.state.filterDepartments ||
+      prevState.filterMembers     !== this.state.filterMembers     ||
+      prevState.filterGuests      !== this.state.filterGuests      ||
+      prevState.zoomLevel         !== this.state.zoomLevel         ||
+      prevState.chartLayout       !== this.state.chartLayout
+    ) {
       this._fixConnectorLines();
     }
 
@@ -729,11 +843,12 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       const focusEmail = chartLayout === 'drill'
         ? (drillPath.length > 0 ? drillPath[drillPath.length - 1].mail ?? null : null)
         : (focusedUser?.mail ?? null);
-      saveChartState({
+      saveChartState(this.props.instanceId, {
         chartLayout, showStats, filterMembers, filterGuests,
         filterDepartments: Array.from(filterDepartments),
         focusEmail,
       });
+      updateUrlFocus(focusEmail);
     }
   }
 
@@ -758,12 +873,71 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
   private async _refreshPresence(): Promise<void> {
     const { graphService } = this.props;
     if (!graphService || !this._mounted) return;
-    const presenceMap = await graphService.getPresence();
+    // Only request presence for users actually on screen
+    const ids = new Set<string>();
+    const collect = (n: IOrgNode): void => { ids.add(n.user.id); n.directReports.forEach(collect); };
+    if (this.state.rootNode) collect(this.state.rootNode);
+    this.state.drillPath.forEach(u => ids.add(u.id));
+    this.state.drillReports.forEach(u => ids.add(u.id));
+    if (this.state.selectedUser) ids.add(this.state.selectedUser.id);
+    if (ids.size === 0) return;
+    const presenceMap = await graphService.getPresence(Array.from(ids));
     if (this._mounted) this.setState({ presenceMap });
   }
 
+  // Builds the tree that matches what's on screen: the current drill level in
+  // drill mode, otherwise the loaded tree with filtered-out users pruned.
+  private _getExportTree(): { node: IOrgNode; note?: string } | null {
+    const { rootNode, chartLayout, drillPath, drillReports } = this.state;
+    const isVisible = this._buildIsVisible();
+
+    if (chartLayout === 'drill' && drillPath.length > 0) {
+      const current = drillPath[drillPath.length - 1];
+      return {
+        node: {
+          user: current,
+          directReports: drillReports.filter(isVisible).map(u => ({
+            user: u, directReports: [], isExpanded: false, childrenLoaded: true, level: 1,
+          })),
+          isExpanded: true, childrenLoaded: true, level: 0,
+        },
+        note: 'Current drill-down level (one level of direct reports)',
+      };
+    }
+
+    if (!rootNode) return null;
+    const filtered = filterTreeForExport(rootNode, isVisible);
+    if (!filtered) return null;
+    const note = this._getUnloadedFrontier(rootNode).length > 0
+      ? 'Includes loaded levels only — use Expand All before exporting to include deeper levels'
+      : undefined;
+    return { node: filtered, note };
+  }
+
   public exportPdf(): void {
-    if (this.state.rootNode) exportOrgChartToPdf(this.state.rootNode);
+    const tree = this._getExportTree();
+    if (tree) exportOrgChartToPdf(tree.node, tree.note);
+  }
+
+  private _exportCsv = (): void => {
+    const tree = this._getExportTree();
+    if (tree) exportOrgChartToCsv(tree.node);
+  }
+
+  private _onSearchChange = (value: string): void => {
+    const q = value.trim().toLowerCase();
+    this.setState(prev => {
+      const updates: Partial<IOrgChartLocalState> = {
+        searchQuery: value,
+        showSearchResults: !!q,
+        showFilters: false,
+      };
+      // Reveal matches hiding inside collapsed branches
+      if (q && prev.chartLayout !== 'drill' && prev.rootNode) {
+        updates.rootNode = expandToMatches(prev.rootNode, q).node;
+      }
+      return updates as IOrgChartLocalState;
+    });
   }
 
   private async _loadTree(): Promise<void> {
@@ -802,8 +976,9 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
           }
         }
       }
-    } catch {
-      if (this._mounted) this.setState({ isLoading: false, error: 'Failed to load org chart. Check permissions.' });
+    } catch (err) {
+      const detail = err instanceof Error && err.message ? ` ${err.message}` : ' Check permissions.';
+      if (this._mounted) this.setState({ isLoading: false, error: `Failed to load org chart.${detail}` });
     }
   }
 
@@ -837,12 +1012,12 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       if (!naturalW || !naturalH) return;
       const cW = container.clientWidth;
       const cH = container.clientHeight;
-      if (naturalW <= cW && naturalH <= cH) return;
       const scaleX = cW / naturalW;
       const scaleY = cH / naturalH;
       const fitZoom = Math.min(scaleX, scaleY) * 0.90;
-      const newZoom = Math.max(0.25, Math.min(0.95, fitZoom));
-      if (newZoom < this.state.zoomLevel) {
+      // Shrink to fit, or grow back toward 100% when a smaller subtree is shown
+      const newZoom = Math.max(0.25, Math.min(1, fitZoom));
+      if (Math.abs(newZoom - this.state.zoomLevel) > 0.01) {
         this.setState({ zoomLevel: newZoom });
       }
     });
@@ -858,11 +1033,22 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
   private async _loadPhotos(ids: string[]): Promise<void> {
     const { graphService } = this.props;
     if (!graphService) return;
+    // Batch setState calls — one render per 10 photos instead of one per photo
+    let batch: { [id: string]: string | null } = {};
+    const flush = (): void => {
+      const toApply = batch;
+      batch = {};
+      if (this._mounted && Object.keys(toApply).length > 0) {
+        this.setState(prev => ({ photos: { ...prev.photos, ...toApply } }));
+      }
+    };
     for (const id of ids) {
-      if (!this._mounted || id in this.state.photos) continue;
-      const url = await graphService.getUserPhoto(id);
-      if (this._mounted) this.setState(prev => ({ photos: { ...prev.photos, [id]: url } }));
+      if (!this._mounted) return;
+      if (id in this.state.photos || id in batch) continue;
+      batch[id] = await graphService.getUserPhoto(id);
+      if (Object.keys(batch).length >= 10) flush();
     }
+    flush();
   }
 
   private async _checkFrontierNodes(rootNode: IOrgNode): Promise<void> {
@@ -968,10 +1154,21 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
 
   private _handleCardClick = (user: IGraphUser): void => {
     if (Date.now() - this._lastPanEndTime < 150) return;
-    this.setState({ selectedUser: user, showFilters: false, personCardManagerChain: [] });
-    if (this.props.graphService) {
-      this.props.graphService.getManagerChain(user.id, 8).then(chain => {
-        if (this._mounted) this.setState({ personCardManagerChain: chain });
+    this.setState({
+      selectedUser: user, showFilters: false, personCardManagerChain: [],
+      personCardDottedManager: null, personCardDottedReports: [],
+    });
+    const gs = this.props.graphService;
+    if (!gs) return;
+    gs.getManagerChain(user.id, 8).then(chain => {
+      if (this._mounted) this.setState({ personCardManagerChain: chain });
+    }).catch(() => { /* ignore */ });
+    gs.getDottedLineReports(user.id).then(reports => {
+      if (this._mounted && reports.length > 0) this.setState({ personCardDottedReports: reports });
+    }).catch(() => { /* ignore */ });
+    if (user.dottedManagerId) {
+      gs.findUser(user.dottedManagerId).then(mgr => {
+        if (this._mounted && mgr) this.setState({ personCardDottedManager: mgr });
       }).catch(() => { /* ignore */ });
     }
   }
@@ -987,10 +1184,8 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       if (!this._mounted) return;
       if (reports.length === 0) {
         // No reports — open profile popup instead of drilling into a dead end
-        this.setState({ drillLoadingId: null, selectedUser: user, personCardManagerChain: [] });
-        graphService.getManagerChain(user.id, 8).then(chain => {
-          if (this._mounted) this.setState({ personCardManagerChain: chain });
-        }).catch(_err => { /* ignore */ });
+        this.setState({ drillLoadingId: null });
+        this._handleCardClick(user);
         return;
       }
       this.setState(prev => ({
@@ -1030,7 +1225,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
   /* ── Focus on person (full-tree mode or drill mode) ── */
 
   private _handleFocusUser = async (user: IGraphUser): Promise<void> => {
-    const { graphService, levelsBelow } = this.props;
+    const { graphService, levelsBelow, levelsAbove } = this.props;
     if (!graphService) return;
     const { chartLayout } = this.state;
 
@@ -1040,7 +1235,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       try {
         const [reports, managerChain] = await Promise.all([
           graphService.getDirectReports(user.id),
-          graphService.getManagerChain(user.id, 10),
+          graphService.getManagerChain(user.id, levelsAbove),
         ]);
         if (!this._mounted) return;
         this.setState({
@@ -1061,7 +1256,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     try {
       const [rootNode, ancestorChain] = await Promise.all([
         graphService.buildOrgTree(user.id, levelsBelow),
-        graphService.getManagerChain(user.id, 10),
+        graphService.getManagerChain(user.id, levelsAbove),
       ]);
       if (this._mounted) {
         const expanded = expandLoaded(rootNode);
@@ -1539,7 +1734,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
             <SearchBox
               placeholder="Search people..."
               value={searchQuery}
-              onChange={(_, v) => this.setState({ searchQuery: v || '', showSearchResults: !!(v && v.trim()), showFilters: false })}
+              onChange={(_, v) => this._onSearchChange(v || '')}
               onFocus={() => { if (searchQuery.trim()) this.setState({ showSearchResults: true }); }}
               className={styles.chartSearch}
               underlined
@@ -1716,6 +1911,14 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
             </div>
           )}
 
+          {/* Export PDF / CSV */}
+          <button className={styles.iconToolBtn} onClick={() => this.exportPdf()} title="Download as PDF">
+            <Icon iconName="PDF" />
+          </button>
+          <button className={styles.iconToolBtn} onClick={this._exportCsv} title="Download as CSV spreadsheet">
+            <Icon iconName="ExcelDocument" />
+          </button>
+
           {/* Root picker — "View from person…" */}
           <div className={styles.rootPickerWrapper} ref={this._rootPickerRef}>
             {runtimeRootUser ? (
@@ -1881,7 +2084,12 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
             presence={presenceMap.get(selectedUser.id)}
             theme={theme}
             managerChain={personCardManagerChain}
-            onClose={() => this.setState({ selectedUser: null, personCardManagerChain: [] })}
+            dottedManager={this.state.personCardDottedManager}
+            dottedReports={this.state.personCardDottedReports}
+            onClose={() => this.setState({
+              selectedUser: null, personCardManagerChain: [],
+              personCardDottedManager: null, personCardDottedReports: [],
+            })}
             onFocus={this._handleFocusUser}
           />
         )}

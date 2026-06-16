@@ -294,8 +294,8 @@
     content: '';
     position: absolute;
     top: 0;
-    left: var(--conn-left, 0px);
-    right: var(--conn-right, 0px);
+    left: var(--conn-left, 50%);
+    right: var(--conn-right, 50%);
     height: 2px;
     background: $ms-color-themeLight;
   }

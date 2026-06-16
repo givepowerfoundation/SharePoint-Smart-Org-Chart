@@ -11,4 +11,6 @@ export interface IEmployeeDirectoryProps {
   showOffice: boolean;
   pageSize: number;
   theme: OrgChartTheme;
+  /** Web part instance ID — scopes localStorage state so instances on different pages don't clash */
+  instanceId: string;
 }

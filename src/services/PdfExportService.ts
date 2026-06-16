@@ -1,6 +1,33 @@
 import html2canvas from 'html2canvas';
 import { IGraphUser, IOrgNode } from './GraphService';
 
+/* ── Shared download / CSV helpers ── */
+
+function downloadBlob(content: string, filename: string, mime: string): void {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Prefix cells that Excel would interpret as formulas (CSV injection mitigation)
+function csvCell(c: string): string {
+  const safe = /^[=+\-@\t\r]/.test(c) ? `'${c}` : c;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+function csvRow(cells: string[]): string {
+  return cells.map(csvCell).join(',');
+}
+
+// UTF-8 BOM ensures Excel opens the file with correct character encoding
+const CSV_BOM = '﻿';
+
 export interface IDirectoryExportOptions {
   showEmail: boolean;
   showPhone: boolean;
@@ -74,28 +101,85 @@ export function exportDirectoryToExcel(users: IGraphUser[], opts: IDirectoryExpo
   if (opts.showEmail)      cols.push({ label: 'Email',      get: u => u.mail || '' });
   if (opts.showPhone)      cols.push({ label: 'Phone',      get: u => u.mobilePhone || (u.businessPhones && u.businessPhones[0]) || '' });
 
-  const csvRow = (cells: string[]): string =>
-    cells.map(c => `"${c.replace(/"/g, '""')}"`).join(',');
-
   const lines = [
     csvRow(cols.map(c => c.label)),
     ...users.map(u => csvRow(cols.map(c => c.get(u)))),
   ];
 
-  // UTF-8 BOM ensures Excel opens the file with correct character encoding
-  const csv = '﻿' + lines.join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `employee-directory-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  downloadBlob(
+    CSV_BOM + lines.join('\r\n'),
+    `employee-directory-${new Date().toISOString().slice(0, 10)}.csv`,
+    'text/csv;charset=utf-8;'
+  );
 }
 
-export function exportOrgChartToPdf(rootNode: IOrgNode): void {
+export function exportOrgChartToCsv(rootNode: IOrgNode): void {
+  const rows: string[] = [
+    csvRow(['Name', 'Job Title', 'Department', 'Office', 'Email', 'Phone', 'Manager', 'Level']),
+  ];
+  const visit = (n: IOrgNode, managerName: string, depth: number): void => {
+    const u = n.user;
+    rows.push(csvRow([
+      u.displayName || '',
+      u.jobTitle || '',
+      u.department || '',
+      u.officeLocation || '',
+      u.mail || '',
+      u.mobilePhone || (u.businessPhones && u.businessPhones[0]) || '',
+      managerName,
+      String(depth),
+    ]));
+    n.directReports.forEach(c => visit(c, u.displayName || '', depth + 1));
+  };
+  visit(rootNode, '', 0);
+
+  downloadBlob(
+    CSV_BOM + rows.join('\r\n'),
+    `org-chart-${new Date().toISOString().slice(0, 10)}.csv`,
+    'text/csv;charset=utf-8;'
+  );
+}
+
+export async function exportOrgChartToPng(treeEl: HTMLElement): Promise<void> {
+  try {
+    const canvas = await html2canvas(treeEl, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+    const url = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `org-chart-${new Date().toISOString().slice(0, 10)}.png`;
+    a.click();
+  } catch {
+    alert('Could not capture the org chart image. Try reducing zoom first.');
+  }
+}
+
+export function exportVCard(user: IGraphUser): void {
+  // Escape vCard special characters (backslash, comma, semicolon)
+  const esc = (s: string): string => s.replace(/\\/g, '\\\\').replace(/[,;]/g, m => `\\${m}`);
+  const parts = (user.displayName || '').split(' ').filter(p => p);
+  const first = parts[0] || '';
+  const last  = parts.length > 1 ? parts[parts.length - 1] : '';
+
+  const lines = ['BEGIN:VCARD', 'VERSION:3.0', `FN:${esc(user.displayName || '')}`, `N:${esc(last)};${esc(first)};;;`];
+  if (user.jobTitle)       lines.push(`TITLE:${esc(user.jobTitle)}`);
+  if (user.department)     lines.push(`ORG:${esc(user.department)}`);
+  if (user.mail)           lines.push(`EMAIL;TYPE=WORK:${user.mail}`);
+  if (user.businessPhones && user.businessPhones[0]) lines.push(`TEL;TYPE=WORK,VOICE:${user.businessPhones[0]}`);
+  if (user.mobilePhone)    lines.push(`TEL;TYPE=CELL:${user.mobilePhone}`);
+  if (user.officeLocation) lines.push(`ADR;TYPE=WORK:;;${esc(user.officeLocation)};;;;`);
+  lines.push('END:VCARD');
+
+  const safeName = (user.displayName || 'contact').replace(/[^\w\- ]/g, '').trim() || 'contact';
+  downloadBlob(lines.join('\r\n'), `${safeName}.vcf`, 'text/vcard;charset=utf-8;');
+}
+
+export function exportOrgChartToPdf(rootNode: IOrgNode, note?: string): void {
   const lines: string[] = [];
 
   const renderNode = (node: IOrgNode, depth: number): void => {
@@ -126,30 +210,11 @@ export function exportOrgChartToPdf(rootNode: IOrgNode): void {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Org Chart</title>
 <style>${BASE_STYLES}</style></head><body>
 <h1>Organization Chart</h1>
-<div class="subtitle">Root: ${escHtml(rootNode.user.displayName)} &nbsp;·&nbsp; ${new Date().toLocaleDateString()}</div>
+<div class="subtitle">Root: ${escHtml(rootNode.user.displayName)} &nbsp;·&nbsp; ${new Date().toLocaleDateString()}${note ? ` &nbsp;·&nbsp; ${escHtml(note)}` : ''}</div>
 ${lines.join('')}
 </body></html>`;
 
   openPrintWindow(html);
-}
-
-export async function exportOrgChartToPng(treeEl: HTMLElement): Promise<void> {
-  try {
-    const canvas = await html2canvas(treeEl, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: null,
-      logging: false,
-    });
-    const url = canvas.toDataURL('image/png');
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `orgchart-${new Date().toISOString().slice(0, 10)}.png`;
-    a.click();
-  } catch {
-    alert('Could not capture the org chart image. Try reducing zoom first.');
-  }
 }
 
 function escHtml(s: string): string {

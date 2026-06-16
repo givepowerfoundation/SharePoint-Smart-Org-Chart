@@ -6,21 +6,26 @@ import { Dropdown, IDropdownOption } from '@fluentui/react/lib/Dropdown';
 import { IGraphUser, PresenceAvailability } from '../../../../services/GraphService';
 import { IEmployeeDirectoryProps } from './IEmployeeDirectoryProps';
 import { exportDirectoryToPdf, exportDirectoryToExcel } from '../../../../services/PdfExportService';
+import { PRESENCE_COLOR, getInitials } from '../personUtils';
 import styles from './EmployeeDirectory.module.scss';
 
 const ALPHABET = ['All', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
 
-const PRESENCE_COLOUR: Record<PresenceAvailability, string> = {
-  Available:    '#6BB700',
-  Busy:         '#C50F1F',
-  DoNotDisturb: '#C50F1F',
-  BeRightBack:  '#FFAA44',
-  Away:         '#FFAA44',
-  Offline:      '#8A8886',
-  Unknown:      '#8A8886',
-};
-
 type ViewMode = 'card' | 'list';
+
+const LS_VIEWMODE_KEY = 'smartOrgChart_dirViewMode';
+
+function viewModeKey(instanceId: string): string {
+  return instanceId ? `${LS_VIEWMODE_KEY}_${instanceId}` : LS_VIEWMODE_KEY;
+}
+
+function readViewMode(instanceId: string): ViewMode {
+  try {
+    const v = localStorage.getItem(viewModeKey(instanceId));
+    if (v === 'card' || v === 'list') return v;
+  } catch { /* ignore */ }
+  return 'card';
+}
 
 interface IEmployeeDirectoryState {
   users: IGraphUser[];
@@ -49,7 +54,7 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
       users: [], isLoading: true, error: null,
       selectedLetter: 'All', searchQuery: '',
       photos: {}, presenceMap: new Map(), currentPage: 1,
-      viewMode: 'card',
+      viewMode: readViewMode(props.instanceId),
       selectedDepartment: '', selectedOffice: ''
     };
   }
@@ -74,12 +79,10 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
       prevState.selectedDepartment !== this.state.selectedDepartment ||
       prevState.selectedOffice !== this.state.selectedOffice
     ) {
-      const filtered = this._getFilteredUsers();
-      const { pageSize } = this.props;
-      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-      const safePage = Math.min(this.state.currentPage, totalPages);
-      const paged = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+      const paged = this._getCurrentPageUsers();
       this._enqueuePhotos(paged.map(u => u.id));
+      // Presence for the newly visible page (cheap — TTL cache skips known users)
+      this._refreshPresence().catch(() => { /* ignore */ });
     }
   }
 
@@ -93,8 +96,19 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
 
   private async _refreshPresence(): Promise<void> {
     if (!this._mounted) return;
-    const presenceMap = await this.props.graphService.getPresence();
+    // Only request presence for the page of users currently on screen
+    const paged = this._getCurrentPageUsers();
+    if (paged.length === 0) return;
+    const presenceMap = await this.props.graphService.getPresence(paged.map(u => u.id));
     if (this._mounted) this.setState({ presenceMap });
+  }
+
+  private _getCurrentPageUsers(): IGraphUser[] {
+    const filtered = this._getFilteredUsers();
+    const { pageSize } = this.props;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const safePage = Math.min(this.state.currentPage, totalPages);
+    return filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
   }
 
   public exportPdf(): void {
@@ -109,11 +123,14 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
 
   private async _loadUsers(): Promise<void> {
     try {
+      // GraphService/MockGraphService both return the list pre-sorted by display name
       const users = await this.props.graphService.getAllUsers();
-      const sorted = [...users].sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
-      if (this._mounted) this.setState({ users: sorted, isLoading: false });
-    } catch {
-      if (this._mounted) this.setState({ isLoading: false, error: 'Failed to load employees. Ensure the web part has User.Read.All permission.' });
+      if (this._mounted) this.setState({ users, isLoading: false });
+    } catch (err) {
+      const detail = err instanceof Error && err.message
+        ? err.message
+        : 'Ensure the web part has User.Read.All permission.';
+      if (this._mounted) this.setState({ isLoading: false, error: `Failed to load employees. ${detail}` });
     }
   }
 
@@ -134,13 +151,6 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
       if (this._mounted) this.setState(prev => ({ photos: { ...prev.photos, [id]: url } }));
     }
     this._processingPhotos = false;
-  }
-
-  private _getInitials(displayName: string): string {
-    const parts = (displayName || '').split(' ').filter(p => p.length > 0);
-    if (parts.length === 0) return '?';
-    if (parts.length === 1) return parts[0][0].toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
 
   private _getFirstName(dn: string): string { return (dn || '').split(' ')[0] || ''; }
@@ -208,6 +218,11 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
     this.setState({ selectedDepartment: '', selectedOffice: '', selectedLetter: 'All', searchQuery: '', currentPage: 1 });
   }
 
+  private _setViewMode = (mode: ViewMode): void => {
+    try { localStorage.setItem(viewModeKey(this.props.instanceId), mode); } catch { /* ignore */ }
+    this.setState({ viewMode: mode });
+  }
+
   /* ── Render helpers ── */
 
   private _renderCardGrid(paged: IGraphUser[]): React.ReactElement {
@@ -230,12 +245,12 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
                 <div className={styles.avatarWrap}>
                   {photoUrl
                     ? <img src={photoUrl} alt={user.displayName} className={styles.avatar} />
-                    : <div className={styles.initials}>{this._getInitials(user.displayName)}</div>
+                    : <div className={styles.initials}>{getInitials(user.displayName)}</div>
                   }
                   {(() => {
                     const s = presenceMap.get(user.id);
                     return s && s !== 'Unknown'
-                      ? <span className={styles.presenceDot} style={{ background: PRESENCE_COLOUR[s] }} />
+                      ? <span className={styles.presenceDot} style={{ background: PRESENCE_COLOR[s] }} />
                       : null;
                   })()}
                 </div>
@@ -325,12 +340,12 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
                     <div className={styles.listAvatarWrap}>
                       {photoUrl
                         ? <img src={photoUrl} alt={user.displayName} className={styles.listAvatar} />
-                        : <div className={styles.listInitials}>{this._getInitials(user.displayName)}</div>
+                        : <div className={styles.listInitials}>{getInitials(user.displayName)}</div>
                       }
                       {(() => {
                         const s = presenceMap.get(user.id);
                         return s && s !== 'Unknown'
-                          ? <span className={styles.presenceDot} style={{ background: PRESENCE_COLOUR[s], width: 8, height: 8 }} />
+                          ? <span className={styles.presenceDot} style={{ background: PRESENCE_COLOR[s], width: 10, height: 10 }} />
                           : null;
                       })()}
                     </div>
@@ -459,14 +474,14 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
           <div className={styles.viewToggle}>
             <button
               className={`${styles.viewBtn} ${viewMode === 'card' ? styles.viewBtnActive : ''}`}
-              onClick={() => this.setState({ viewMode: 'card' })}
+              onClick={() => this._setViewMode('card')}
               title="Card view"
             >
               <Icon iconName="GridViewMedium" />
             </button>
             <button
               className={`${styles.viewBtn} ${viewMode === 'list' ? styles.viewBtnActive : ''}`}
-              onClick={() => this.setState({ viewMode: 'list' })}
+              onClick={() => this._setViewMode('list')}
               title="List view"
             >
               <Icon iconName="BulletedList" />

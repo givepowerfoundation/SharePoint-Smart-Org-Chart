@@ -1,7 +1,7 @@
 # Smart Org Chart — User Guide
-**Version 1.2.0**
+**Version 1.2.1**
 
-Smart Org Chart is a SharePoint web part that gives your organisation two complementary views of its people data: a searchable **Employee Directory** and an interactive **Org Chart**, both powered by Microsoft Graph.
+Smart Org Chart is a SharePoint web part that gives your organization two complementary views of its people data: a searchable **Employee Directory** and an interactive **Org Chart**, both powered by Microsoft Graph.
 
 ---
 
@@ -42,14 +42,13 @@ The header bar is always visible at the top of the web part.
 | **Logo** | Company logo configured by the admin (optional) |
 | **App / View title** | Company name (if set) and the name of the current view |
 | **View toggle** | Switches between Employee Directory and Org Chart |
-| **Export PDF** | Downloads the current view as a PDF |
 | **Settings gear** | Opens the [User Preferences](#6-user-preferences) panel |
 
 ---
 
 ## 3. Employee Directory
 
-The Employee Directory displays your organisation's people as a paginated grid of cards.
+The Employee Directory displays your organization's people as a paginated grid of cards.
 
 ![Employee Directory showing the A–Z filter bar, search box, and employee cards](screenshots/03-directory-overview.png)
 
@@ -95,7 +94,7 @@ Navigation arrows and a page indicator appear at the bottom of the directory whe
 
 ## 4. Org Chart
 
-The Org Chart displays your organisation's reporting hierarchy. Three layouts are available, switchable from the toolbar.
+The Org Chart displays your organization's reporting hierarchy. Three layouts are available, switchable from the toolbar.
 
 ### Drill-Down Layout
 
@@ -124,7 +123,7 @@ The vertical and horizontal tree layouts display the full loaded hierarchy simul
 **Expanding and collapsing:**
 
 - Click the **chevron button** at the bottom of a card to expand or collapse that branch.
-- Use **Expand All** / **Collapse All** in the toolbar to expand or collapse every node at once. **Expand All** fetches the complete organisation, loading any levels that have not yet been retrieved from Microsoft Graph.
+- Use **Expand All** / **Collapse All** in the toolbar to expand or collapse every node at once. **Expand All** fetches the complete organization, loading any levels that have not yet been retrieved from Microsoft Graph.
 
 **Panning:** Click and drag anywhere on the chart canvas to scroll.
 
@@ -139,13 +138,15 @@ The toolbar appears above the chart and contains the following controls (some ma
 | Control | Description |
 |---|---|
 | **Search box** | Search all people in the org. A live dropdown shows up to 8 matching people; click a result to focus the chart on that person. In tree mode, matching cards are highlighted in the chart. |
-| **Expand All / Collapse All** | Available in tree modes only. Expand All loads and shows the entire organisation. |
-| **Find Me** | Centres the org chart on your own profile. |
+| **Expand All / Collapse All** | Available in tree modes only. Expand All loads and shows the entire organization. |
+| **Find Me** | Centers the org chart on your own profile. |
 | **View from person…** | Type a name to temporarily re-root the chart at any person. The chart reloads from that person downward. Click the × to return to the default root. |
 | **View** | Opens the layout picker to switch between Drill-Down, Top Down, and Left to Right. |
 | **Stats bar** (chart icon) | Toggles a summary bar showing total people, members, guests, and departments. |
 | **Department filter** (tools icon) | Shows checkboxes to show only selected departments. A badge on the button shows how many filters are active. |
 | **User type filter** (funnel icon) | Toggles visibility of Regular members and Guest users. |
+| **Export PDF** (PDF icon) | Downloads the currently visible org chart as a PDF. |
+| **Export CSV** (Excel icon) | Downloads the currently visible org chart as a CSV spreadsheet. |
 | **Zoom controls** | Visible in tree modes only. Adjust the scale from 25% to 150%. |
 
 #### Stats bar
@@ -171,7 +172,7 @@ The profile card shows:
 - **Email, phone numbers, and office location**
 - **Disabled / Guest badges** where applicable
 - **Reports to** — the person's manager chain up to 8 levels, shown as clickable chips. Click any chip to jump to that manager.
-- **Action buttons:** Chat in Teams, Email, Call (if a phone number is available), and Focus (re-centres the org chart on this person)
+- **Action buttons:** Chat in Teams, Email, and Focus (re-centers the org chart on this person)
 
 Press **Escape** or click the overlay to close the card.
 
@@ -217,16 +218,22 @@ Click **Save** to apply changes. **Cancel** discards unsaved changes.
 
 ## 7. Exporting
 
-### Export to PDF
+### Export Org Chart to PDF
 
-Click the **Download** (↓) button in the header bar to export the current view to PDF.
+Click the **PDF** button in the org chart toolbar to export the currently visible chart as a PDF.
 
-- **Directory:** exports all visible employee cards, respecting the current alphabet/search filter.
-- **Org Chart:** exports the currently visible chart tree.
+- **Drill-Down mode:** exports the current person's header and their direct reports.
+- **Tree modes (Top Down / Left to Right):** exports all currently loaded and expanded nodes.
+
+> To include deeper levels in the export, click **Expand All** in the toolbar before exporting.
 
 ### Export Directory to CSV
 
 Click the **Export** button in the Employee Directory toolbar to download the current filtered list as a CSV file that opens directly in Excel. The exported columns match your visible field preferences (name, title, department, office, email, phone).
+
+### Export Org Chart to CSV
+
+Click the **Excel** icon button in the org chart toolbar to download the currently visible org chart tree as a CSV file.
 
 ---
 
@@ -253,7 +260,7 @@ Open the SharePoint property pane (**Edit** → click the web part → pencil ic
 
 | Setting | Options | Description |
 |---|---|---|
-| **Chart Theme** | Modern, Minimal, Corporate, Dark | Colour scheme for employee cards and the org chart |
+| **Chart Theme** | Modern, Minimal, Corporate, Dark | Color scheme for employee cards and the org chart |
 | **Default Font Size** | 75% – 175% | Starting text scale for all users. Users can override this in their own Preferences. |
 | **Default Org Chart Layout** | Drill-Down, Top Down, Left to Right | The layout shown when a user opens the chart for the first time. Their choice is remembered after that. |
 
@@ -276,8 +283,8 @@ These filters are applied globally — hidden users do not appear in the directo
 | Setting | Default | Description |
 |---|---|---|
 | **Exclude accounts** | _(empty)_ | Comma-separated words or patterns (case-insensitive). Any user whose display name, email, or UPN contains one of these is hidden. Useful for removing shared mailboxes (`noreply`), service accounts (`svc-`), or room mailboxes (`conf-`). |
-| **Only show tenant users** | Off | When on, hides accounts whose email domain does not match your organisation's domain. Removes external gmail.com, hotmail.com, and other personal email accounts. |
-| **Hide Azure AD guest accounts** | **On** | Hides B2B guest accounts (users from other organisations invited to your tenant). |
+| **Only show tenant users** | Off | When on, hides accounts whose email domain does not match your organization's domain. Removes external gmail.com, hotmail.com, and other personal email accounts. |
+| **Hide Azure AD guest accounts** | **On** | Hides B2B guest accounts (users from other organizations invited to your tenant). |
 | **Hide disabled accounts** | **On** | Hides accounts with blocked sign-in — typically former employees or deactivated service accounts. Requires the Graph API data source. |
 | **Hide accounts without a job title** | Off | Hides any account that has no job title set in Azure AD. Useful for removing shared mailboxes and system accounts that don't have profile data. |
 | **Hide accounts without a department** | Off | Hides any account that has no department set in Azure AD. |
@@ -320,11 +327,11 @@ These toggles show or hide individual toolbar buttons and features. Hide control
 
 ## 9. Themes
 
-The **Chart Theme** property controls the visual appearance of employee cards and the org chart. All four themes support the same set of features. Card accent colours and connector lines follow your SharePoint site's colour theme automatically.
+The **Chart Theme** property controls the visual appearance of employee cards and the org chart. All four themes support the same set of features. Card accent colors and connector lines follow your SharePoint site's color theme automatically.
 
 | Theme | Description |
 |---|---|
-| **Modern** (default) | White cards with accent colours matching your SharePoint site theme |
+| **Modern** (default) | White cards with accent colors matching your SharePoint site theme |
 | **Minimal** | Clean flat design with a subtle left-border accent; low visual noise |
 | **Corporate** | Unified blue palette, consistent with a formal enterprise look |
 | **Dark** | Dark navy background, ideal for digital signage or low-light environments |
@@ -335,11 +342,12 @@ The **Chart Theme** property controls the visual appearance of employee cards an
 
 ## 10. Tips
 
-- **Find someone fast:** Use the search box in the org chart toolbar — it searches across the entire organisation, not just the loaded levels.
+- **Find someone fast:** Use the search box in the org chart toolbar — it searches across the entire organization, not just the loaded levels.
 - **Explore a sub-tree:** Use **View from person…** in the org chart toolbar to temporarily re-root the chart at any person. Great for exploring a specific department or team without changing the admin configuration.
 - **See the whole org:** Click **Expand All** in the tree toolbar. The web part will load every level from Microsoft Graph and expand them automatically.
 - **Navigate deep hierarchies:** In drill-down mode, click through cards to explore; use the breadcrumb to jump back up without reloading the tree.
-- **Compare departments:** Use the department filter to isolate one or more teams in the org chart.
+- **Compare departments:** Use the department filter to isolate one or more teams in the org chart. Ancestor nodes remain visible so you can see the full reporting chain above any matching person.
 - **Presence badges:** Presence status (green = Available, red = Busy, yellow = Away) updates every 60 seconds from Microsoft Teams.
 - **Export the directory:** Click **Export** in the directory toolbar to download the current filtered list as a CSV file for use in Excel.
+- **Export the org chart:** Use the **PDF** button in the org chart toolbar to save the currently visible chart. For a complete export, click **Expand All** first.
 - **Hide room mailboxes:** If meeting rooms appear in the directory, add their naming pattern (e.g. `conf-`) to **Exclude accounts** in the property pane.

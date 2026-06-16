@@ -1,6 +1,6 @@
 // MockGraphService — used automatically when the web part runs on localhost or demo mode.
 // Supports three company sizes (150 / 500 / 1 000) selectable via the demo banner.
-import { GraphService, IGraphUser, IOrgNode, PresenceAvailability } from './GraphService';
+import { GraphService, IGraphUser, IOrgNode, IUserFilterOptions, PresenceAvailability } from './GraphService';
 
 const delay = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
 
@@ -518,9 +518,10 @@ export class MockGraphService extends GraphService {
   private _mockChildrenMap: Map<string, IGraphUser[]> = new Map();
   private _mockManagerMap:  Map<string, string> = new Map();
   private _mockPresence:    Map<string, PresenceAvailability> = new Map();
+  private _mockDottedMap:   Map<string, IGraphUser[]> = new Map();
 
-  constructor(size: MockCompanySize = 150) {
-    super(null as any, 'https://localhost', undefined);
+  constructor(size: MockCompanySize = 150, filterOptions: IUserFilterOptions = {}) {
+    super(null as any, 'https://localhost', undefined, 'auto', filterOptions);
     this._init(buildRaw(size));
   }
 
@@ -546,6 +547,8 @@ export class MockGraphService extends GraphService {
       });
     }
 
+    // Honor the admin User Filters so demo mode behaves like live data
+    this._mockUsers = this._applyUserFilters(this._mockUsers);
     this._mockUsers.sort((a, b) => a.displayName.localeCompare(b.displayName));
 
     const byEmail = new Map<string, IGraphUser>(this._mockUsers.map(u => [u.id, u]));
@@ -562,6 +565,22 @@ export class MockGraphService extends GraphService {
     for (const user of this._mockUsers) {
       this._mockPresence.set(user.id, PRESENCE_POOL[hashCode(user.id) % PRESENCE_POOL.length]);
     }
+
+    // Dotted-line (secondary manager) demo relationships
+    const DOTTED: Array<[string, string]> = [
+      ['sa.yip@contoso.com',      'mi.davis@contoso.com'],   // Backend tech lead ↔ Consumer Products director
+      ['ah.tran@contoso.com',     'e.rodriguez@contoso.com'], // UX Design lead ↔ Frontend director
+      ['ga.sanchez@contoso.com',  'd.williams@contoso.com'],  // FP&A manager ↔ VP Sales
+    ];
+    this._mockDottedMap = new Map();
+    for (const [reportEmail, mgrEmail] of DOTTED) {
+      const rep = byEmail.get(reportEmail);
+      const mgr = byEmail.get(mgrEmail);
+      if (!rep || !mgr) continue;
+      rep.dottedManagerId = mgr.id;
+      if (!this._mockDottedMap.has(mgr.id)) this._mockDottedMap.set(mgr.id, []);
+      (this._mockDottedMap.get(mgr.id) as IGraphUser[]).push(rep);
+    }
   }
 
   public getAllUsers(): Promise<IGraphUser[]> {
@@ -574,6 +593,10 @@ export class MockGraphService extends GraphService {
 
   public getDirectReports(userId: string): Promise<IGraphUser[]> {
     return Promise.resolve([...(this._mockChildrenMap.get(userId) || [])]);
+  }
+
+  public getDottedLineReports(userId: string): Promise<IGraphUser[]> {
+    return Promise.resolve([...(this._mockDottedMap.get(userId) || [])]);
   }
 
   public hasDirectReports(userId: string): Promise<boolean> {

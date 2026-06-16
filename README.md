@@ -22,7 +22,6 @@ A SharePoint Framework web part that gives any SharePoint Online page a searchab
 | **A–Z filter** | Alphabet bar, switchable between first name or last name |
 | **Pagination** | Configurable cards-per-page (10–200) |
 | **Export to CSV** | Downloads the current filtered list as an Excel-compatible CSV file |
-| **Export to PDF** | Downloads the current directory view as a PDF |
 
 ### Org Chart
 
@@ -36,7 +35,8 @@ A SharePoint Framework web part that gives any SharePoint Online page a searchab
 | **User type filter** | Show or hide members and guest users independently |
 | **Statistics panel** | Headcount, members, guests, and departments overlaid on the chart |
 | **Zoom** | 25%–150% with auto-fit on initial load |
-| **Export to PDF** | Downloads the currently visible tree as a PDF |
+| **Export to PDF** | PDF button in the toolbar downloads the currently visible chart |
+| **Export to CSV** | CSV button in the toolbar downloads the currently visible chart data |
 
 ### People Cards & Presence
 
@@ -44,7 +44,7 @@ A SharePoint Framework web part that gives any SharePoint Online page a searchab
 |---|---|
 | **Profile photos** | Loaded from Microsoft Graph with base64 caching; initials avatar as fallback |
 | **Presence badges** | Live availability from Microsoft Teams, refreshed every 60 seconds |
-| **Person profile card** | Full card with manager chain, action buttons (Chat, Email, Call, Focus) |
+| **Person profile card** | Full card with manager chain, action buttons (Chat, Email, Focus) |
 
 ### Admin & Personalization
 

@@ -12,6 +12,7 @@ export interface IGraphUser {
   userPrincipalName: string;
   accountEnabled?: boolean;  // false = disabled / blocked sign-in
   userType?: string;         // 'Member' | 'Guest' | undefined
+  dottedManagerId?: string;  // secondary "dotted line" manager (resolved user id)
 }
 
 export type PresenceAvailability =
@@ -52,6 +53,9 @@ export class GraphService {
   private _childrenMap:    Map<string, IGraphUser[]> = new Map();
   private _managerMap:        Map<string, string> = new Map();   // userId → managerId (resolved)
   private _pendingManagerIds: Map<string, string> = new Map();   // userId → raw managerId (pre-resolution)
+  private _dottedLineAttribute: string;                          // AAD extension attribute holding the dotted-line manager
+  private _pendingDottedIds:  Map<string, string> = new Map();   // userId → raw dotted managerId (pre-resolution)
+  protected _dottedReportsMap: Map<string, IGraphUser[]> = new Map(); // managerId → dotted-line reports
   private _loadingPromise: Promise<IGraphUser[]> | null = null;
   private _upnToObjectId:   Map<string, string> = new Map();     // upn → AAD object id
   private _presenceCache:   Map<string, PresenceAvailability> = new Map();
@@ -63,13 +67,15 @@ export class GraphService {
     webUrl: string,
     graphClient?: MSGraphClientV3,
     dataSource: DataSource = 'auto',
-    filterOptions: IUserFilterOptions = {}
+    filterOptions: IUserFilterOptions = {},
+    dottedLineAttribute = ''
   ) {
     this._client        = client;
     this._webUrl        = webUrl.replace(/\/$/, '');
     this._graphClient   = graphClient;
     this._dataSource    = dataSource;
     this._filterOptions = filterOptions;
+    this._dottedLineAttribute = dottedLineAttribute.trim();
   }
 
   /* ── Public API ──────────────────────────────────────────────────── */
@@ -122,7 +128,7 @@ export class GraphService {
     return this._applyUserFilters(await this._supplementUnlicensedReports(users));
   }
 
-  private _applyUserFilters(users: IGraphUser[]): IGraphUser[] {
+  protected _applyUserFilters(users: IGraphUser[]): IGraphUser[] {
     const { tenantDomain, excludedPatterns, hideGuestUsers, hideDisabledAccounts,
             hideNoJobTitle, hideNoDepartment } = this._filterOptions;
     const hasFilters = tenantDomain || (excludedPatterns && excludedPatterns.length > 0) ||
@@ -163,6 +169,11 @@ export class GraphService {
     return this._childrenMap.get(userId.toLowerCase()) || [];
   }
 
+  public async getDottedLineReports(userId: string): Promise<IGraphUser[]> {
+    if (!this._allUsersCache) await this.getAllUsers();
+    return this._dottedReportsMap.get(userId.toLowerCase()) || [];
+  }
+
   public async hasDirectReports(userId: string): Promise<boolean> {
     if (!this._allUsersCache) await this.getAllUsers();
     const kids = this._childrenMap.get(userId.toLowerCase());
@@ -200,20 +211,32 @@ export class GraphService {
     );
   }
 
-  public async getPresence(): Promise<Map<string, PresenceAvailability>> {
+  // Fetches presence for the given user IDs only (pass the users currently on
+  // screen — fetching the whole tenant every poll does not scale). Omitting
+  // userIds falls back to all known users.
+  public async getPresence(userIds?: string[]): Promise<Map<string, PresenceAvailability>> {
     if (!this._graphClient) return new Map();
-    if (Date.now() < this._presenceExpiry) return this._presenceCache;
 
     if (this._upnToObjectId.size === 0) await this._fetchObjectIdMap();
 
-    const objectIds = Array.from(this._upnToObjectId.values());
-    if (objectIds.length === 0) return this._presenceCache;
+    const wanted = userIds
+      ? Array.from(new Set(userIds.map(id => id.toLowerCase())))
+      : Array.from(this._upnToObjectId.keys());
+
+    // Within the TTL, only fetch IDs we have not resolved yet
+    const fresh = Date.now() < this._presenceExpiry;
+    const toFetch = fresh ? wanted.filter(upn => !this._presenceCache.has(upn)) : wanted;
+    if (toFetch.length === 0) return this._presenceCache;
 
     // Build reverse map so we can key results back by UPN
+    const objectIds: string[] = [];
     const reverseMap = new Map<string, string>();
-    this._upnToObjectId.forEach((objId, upn) => reverseMap.set(objId, upn));
+    for (const upn of toFetch) {
+      const objId = this._upnToObjectId.get(upn);
+      if (objId) { objectIds.push(objId); reverseMap.set(objId, upn); }
+    }
+    if (objectIds.length === 0) return this._presenceCache;
 
-    this._presenceCache.clear();
     const CHUNK = 650;
     for (let i = 0; i < objectIds.length; i += CHUNK) {
       try {
@@ -374,7 +397,8 @@ export class GraphService {
     if (!this._graphClient) throw new Error('Graph client not available');
 
     const users: IGraphUser[] = [];
-    const SELECT = 'id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones,accountEnabled,userType';
+    let SELECT = 'id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones,accountEnabled,userType';
+    if (this._dottedLineAttribute) SELECT += ',onPremisesExtensionAttributes';
     let url: string | null =
       `/users?$select=${SELECT}&$expand=manager($select=id,userPrincipalName,mail)&$top=999`;
 
@@ -395,6 +419,7 @@ export class GraphService {
         accountEnabled?: boolean;
         userType?: string;
         manager?: { id: string; userPrincipalName: string; mail: string };
+        onPremisesExtensionAttributes?: { [key: string]: string | null };
       }> = response?.value || [];
 
       for (const item of items) {
@@ -418,6 +443,12 @@ export class GraphService {
         const mgrMail = (item.manager?.mail || '').toLowerCase();
         const mgrId   = mgrUpn || mgrMail;
         if (mgrId) this._pendingManagerIds.set(id, mgrId);
+
+        // Dotted-line manager from the configured extension attribute (email or UPN)
+        if (this._dottedLineAttribute) {
+          const dotted = (item.onPremisesExtensionAttributes?.[this._dottedLineAttribute] || '').trim().toLowerCase();
+          if (dotted) this._pendingDottedIds.set(id, dotted);
+        }
 
         users.push({
           id,
@@ -484,11 +515,21 @@ export class GraphService {
   }
 
   private _buildMaps(users: IGraphUser[]): void {
+    // Display name is a last-resort manager lookup (SP Search sometimes stores
+    // only the manager's name). Skip names shared by multiple users — guessing
+    // would silently attach reports to the wrong person.
+    const nameCount: { [key: string]: number } = {};
+    for (const user of users) {
+      const dn = user.displayName.toLowerCase();
+      nameCount[dn] = (nameCount[dn] || 0) + 1;
+    }
+
     const canonicalId: { [key: string]: string } = {};
     for (const user of users) {
       canonicalId[user.id] = user.id;
       if (user.mail) canonicalId[user.mail.toLowerCase()] = user.id;
-      canonicalId[user.displayName.toLowerCase()] = user.id;
+      const dn = user.displayName.toLowerCase();
+      if (nameCount[dn] === 1) canonicalId[dn] = user.id;
     }
 
     this._childrenMap.clear();
@@ -502,6 +543,18 @@ export class GraphService {
       (this._childrenMap.get(mgrId) as IGraphUser[]).push(user);
     }
     this._pendingManagerIds.clear();
+
+    this._dottedReportsMap.clear();
+    for (const user of users) {
+      const rawDotted = this._pendingDottedIds.get(user.id);
+      if (!rawDotted) continue;
+      const dottedId = canonicalId[rawDotted];
+      if (!dottedId || dottedId === user.id) continue; // unresolvable or self-reference
+      user.dottedManagerId = dottedId;
+      if (!this._dottedReportsMap.has(dottedId)) this._dottedReportsMap.set(dottedId, []);
+      (this._dottedReportsMap.get(dottedId) as IGraphUser[]).push(user);
+    }
+    this._pendingDottedIds.clear();
   }
 
   private _rowToUser(cells: Array<{ Key: string; Value: string }>): IGraphUser | null {

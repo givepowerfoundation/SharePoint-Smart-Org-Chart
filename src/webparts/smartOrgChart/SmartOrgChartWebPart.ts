@@ -40,6 +40,7 @@ export interface ISmartOrgChartWebPartProps {
   defaultFontScale: number;
   // Data
   dataSource: 'auto' | 'graph' | 'search';
+  dottedLineAttribute: string;
   // User filters
   excludedAccounts: string;
   restrictToTenantDomain: boolean;
@@ -68,6 +69,7 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
     if (p.logoUrl     === undefined) p.logoUrl     = '';
     // Data source default
     if (p.dataSource  === undefined) p.dataSource  = 'auto';
+    if (p.dottedLineAttribute === undefined) p.dottedLineAttribute = '';
     // User filter defaults
     if (p.excludedAccounts       === undefined) p.excludedAccounts       = '';
     if (p.restrictToTenantDomain === undefined) p.restrictToTenantDomain = false;
@@ -98,15 +100,13 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
       enableDeptFilter: this.properties.enableDeptFilter !== false,
       enableUserFilter: this.properties.enableUserFilter !== false,
       dataSource: this.properties.dataSource || 'auto',
+      dottedLineAttribute: this.properties.dottedLineAttribute || '',
       excludedAccounts:       this.properties.excludedAccounts       || '',
       restrictToTenantDomain: this.properties.restrictToTenantDomain || false,
       hideGuestUsers:         this.properties.hideGuestUsers         || false,
       hideDisabledAccounts:   this.properties.hideDisabledAccounts   || false,
       hideNoJobTitle:         this.properties.hideNoJobTitle         || false,
       hideNoDepartment:       this.properties.hideNoDepartment       || false,
-      onSettingsSaved: (newProps: Partial<ISmartOrgChartWebPartProps>) => {
-        Object.assign(this.properties, newProps);
-      }
     });
 
     ReactDom.render(element, this.domElement);
@@ -241,6 +241,9 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
                   onText: 'On — blocked sign-in accounts hidden',
                   offText: 'Off — disabled accounts visible (shown with Disabled badge)'
                 }),
+                PropertyPaneLabel('hideDisabledAccounts', {
+                  text: 'Note: guest and disabled account detection requires the Graph API data source. SharePoint Search does not return this information, so these two filters (and the Guest/Disabled badges) have no effect when data comes from Search.'
+                }),
                 PropertyPaneToggle('hideNoJobTitle', {
                   label: 'Hide accounts without a job title',
                   onText: 'On — accounts with no job title hidden',
@@ -268,6 +271,11 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
                   value: 3,
                   showValue: true,
                   step: 1
+                }),
+                PropertyPaneTextField('dottedLineAttribute', {
+                  label: 'Dotted-line manager attribute',
+                  placeholder: 'extensionAttribute10',
+                  description: 'Optional. Name of the Azure AD on-premises extension attribute (extensionAttribute1-15) that stores a secondary "dotted line" manager\'s email or UPN. Dotted-line relationships appear on profile cards. Requires the Graph API data source.'
                 }),
                 PropertyPaneDropdown('defaultZoom', {
                   label: 'Default Org Chart Zoom',

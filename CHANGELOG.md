@@ -4,6 +4,23 @@ All notable changes to Smart Org Chart are documented here.
 
 ---
 
+## [1.2.1] — 2026-06-16
+
+### Changed
+- **Export PDF moved to org chart toolbar** — the PDF export button is now in the org chart toolbar (where the PNG button was), keeping export controls alongside the chart rather than in the header bar.
+- **Employee Directory photo sizes increased** — profile photos in the card view are now 80 px (up from 64 px) and in the list view 52 px (up from 40 px). Initials avatars and presence dots scale proportionally.
+
+### Fixed
+- **Department filter blanked the entire chart** — when a department filter was applied, the root node (e.g. CEO) was hidden because they were not in the selected department, causing the whole tree to disappear. Ancestor nodes are now kept visible when any of their descendants match the active filter.
+- **Connector lines not updated after filtering** — horizontal connector bars between levels retained stale positions after a department, member, or guest filter was changed, or after the zoom level or layout was switched. `_fixConnectorLines` now runs whenever any of these values change.
+- **Full-width horizontal connector flash** — the horizontal connector bar between tree levels briefly appeared full-width before JavaScript recalculated its span. The CSS default is now zero-width so there is no visible flash on initial render.
+
+### Removed
+- **Header-level PDF download button** — the Download (↓) button that appeared in the header bar next to the Settings gear has been removed. PDF export for the org chart is now available directly in the org chart toolbar.
+- **Profile card action buttons simplified** — the Meet (schedule meeting), vCard (download contact), Copy Link, and Call buttons have been removed from the person profile card popup. The remaining actions are Chat in Teams, Email, and Focus.
+
+---
+
 ## [1.2.0] — 2026-06-07
 
 ### Added

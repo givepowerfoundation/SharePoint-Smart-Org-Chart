@@ -5,8 +5,6 @@ export type OrgChartTheme = 'modern' | 'minimal' | 'corporate' | 'dark';
 
 export interface ISmartOrgChartProps extends ISmartOrgChartWebPartProps {
   context: WebPartContext;
-  onSettingsSaved: (newProps: Partial<ISmartOrgChartWebPartProps>) => void;
-  hideDemoBanner?: boolean;
 }
 
 export interface IUserSettings {

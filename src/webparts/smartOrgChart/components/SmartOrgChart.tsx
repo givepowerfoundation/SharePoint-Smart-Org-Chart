@@ -19,6 +19,24 @@ const LS_KEY      = 'smartOrgChart_userSettings';
 const LS_MOCK_KEY = 'smartOrgChart_mockSize';
 const LS_VIEW_KEY = 'smartOrgChart_currentView';
 
+// All SharePoint sites in a tenant share one origin, so bare keys would be
+// shared by every web part instance on every page. Scope them by instance ID,
+// reading the legacy un-scoped key as a migration fallback.
+function scopedKey(base: string, instanceId: string): string {
+  return instanceId ? `${base}_${instanceId}` : base;
+}
+
+function lsGet(base: string, instanceId: string): string | null {
+  try {
+    return localStorage.getItem(scopedKey(base, instanceId)) ?? localStorage.getItem(base);
+  } catch {
+    return null;
+  }
+}
+
+function lsSet(base: string, instanceId: string, value: string): void {
+  try { localStorage.setItem(scopedKey(base, instanceId), value); } catch { /* ignore */ }
+}
 
 interface ISmartOrgChartState {
   currentView: 'directory' | 'orgchart';
@@ -26,11 +44,12 @@ interface ISmartOrgChartState {
   graphService: GraphService | null;
   userSettings: IUserSettings;
   mockSize: MockCompanySize;
+  serviceGen: number;
 }
 
-function loadUserSettings(defaultFontScale = 1): IUserSettings {
+function loadUserSettings(defaultFontScale: number, instanceId: string): IUserSettings {
   try {
-    const stored = localStorage.getItem(LS_KEY);
+    const stored = lsGet(LS_KEY, instanceId);
     if (stored) return { ...buildDefaultSettings(defaultFontScale), ...JSON.parse(stored) };
   } catch {
     // ignore
@@ -52,37 +71,36 @@ function buildDefaultSettings(defaultFontScale = 1): IUserSettings {
   };
 }
 
-function readMockSize(): MockCompanySize {
-  try {
-    const v = localStorage.getItem(LS_MOCK_KEY);
-    if (v === '500')  return 500;
-    if (v === '1000') return 1000;
-  } catch { /* ignore */ }
+function readMockSize(instanceId: string): MockCompanySize {
+  const v = lsGet(LS_MOCK_KEY, instanceId);
+  if (v === '500')  return 500;
+  if (v === '1000') return 1000;
   return 150;
 }
 
-function readCurrentView(fallback: 'directory' | 'orgchart'): 'directory' | 'orgchart' {
-  try {
-    const v = localStorage.getItem(LS_VIEW_KEY);
-    if (v === 'directory' || v === 'orgchart') return v;
-  } catch { /* ignore */ }
+function readCurrentView(fallback: 'directory' | 'orgchart', instanceId: string): 'directory' | 'orgchart' {
+  const v = lsGet(LS_VIEW_KEY, instanceId);
+  if (v === 'directory' || v === 'orgchart') return v;
   return fallback;
 }
 
 export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOrgChartState> {
   private _directoryRef = React.createRef<EmployeeDirectory>();
   private _orgChartRef  = React.createRef<OrgChart>();
+  private _instanceId: string;
 
   constructor(props: ISmartOrgChartProps) {
     super(props);
-    const userSettings = loadUserSettings(props.defaultFontScale || 1);
-    const mockSize     = readMockSize();
+    this._instanceId   = props.context?.instanceId || '';
+    const userSettings = loadUserSettings(props.defaultFontScale || 1, this._instanceId);
+    const mockSize     = readMockSize(this._instanceId);
     this.state = {
-      currentView: readCurrentView(props.defaultView || 'directory'),
+      currentView: readCurrentView(props.defaultView || 'directory', this._instanceId),
       isSettingsOpen: false,
       graphService: null,
       userSettings,
       mockSize,
+      serviceGen: 0,
     };
   }
 
@@ -99,7 +117,8 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
       prev.hideGuestUsers        !== this.props.hideGuestUsers ||
       prev.restrictToTenantDomain !== this.props.restrictToTenantDomain ||
       prev.hideNoJobTitle        !== this.props.hideNoJobTitle ||
-      prev.hideNoDepartment      !== this.props.hideNoDepartment
+      prev.hideNoDepartment      !== this.props.hideNoDepartment ||
+      prev.dottedLineAttribute   !== this.props.dottedLineAttribute
     ) {
       await this._initGraphService();
     }
@@ -109,9 +128,29 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
     return window.location.hostname === 'localhost' || !!this.props.useDemoData;
   }
 
+  private _buildFilterOptions(tenantDomain?: string): IUserFilterOptions {
+    return {
+      tenantDomain,
+      excludedPatterns: (this.props.excludedAccounts || '')
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(s => s.length > 0),
+      hideGuestUsers:       this.props.hideGuestUsers       || false,
+      hideDisabledAccounts: this.props.hideDisabledAccounts || false,
+      hideNoJobTitle:       this.props.hideNoJobTitle       || false,
+      hideNoDepartment:     this.props.hideNoDepartment     || false,
+    };
+  }
+
   private async _initGraphService(): Promise<void> {
     if (this._isDemoMode()) {
-      this.setState({ graphService: new MockGraphService(this.state.mockSize) as unknown as GraphService });
+      // No tenantDomain here — demo users are @contoso.com, so restricting to
+      // the real tenant's domain would hide everyone
+      const filterOptions = this._buildFilterOptions();
+      this.setState(prev => ({
+        graphService: new MockGraphService(prev.mockSize, filterOptions) as unknown as GraphService,
+        serviceGen: prev.serviceGen + 1,
+      }));
       return;
     }
     const { spHttpClient, msGraphClientFactory, pageContext } = this.props.context;
@@ -130,51 +169,34 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
       if (atIdx > 0) tenantDomain = userEmail.substring(atIdx + 1);
     }
 
-    const filterOptions: IUserFilterOptions = {
-      tenantDomain,
-      excludedPatterns: (this.props.excludedAccounts || '')
-        .split(',')
-        .map(s => s.trim().toLowerCase())
-        .filter(s => s.length > 0),
-      hideGuestUsers:       this.props.hideGuestUsers       || false,
-      hideDisabledAccounts: this.props.hideDisabledAccounts || false,
-      hideNoJobTitle:       this.props.hideNoJobTitle       || false,
-      hideNoDepartment:     this.props.hideNoDepartment     || false,
-    };
+    const filterOptions = this._buildFilterOptions(tenantDomain);
 
-    this.setState({
-      graphService: new GraphService(
-        spHttpClient,
-        pageContext.web.absoluteUrl,
-        graphClient,
-        this.props.dataSource || 'auto',
-        filterOptions
-      )
-    });
+    const service = new GraphService(
+      spHttpClient,
+      pageContext.web.absoluteUrl,
+      graphClient,
+      this.props.dataSource || 'auto',
+      filterOptions,
+      this.props.dottedLineAttribute || ''
+    );
+    this.setState(prev => ({ graphService: service, serviceGen: prev.serviceGen + 1 }));
   }
 
   private _setMockSize = (size: MockCompanySize): void => {
-    try { localStorage.setItem(LS_MOCK_KEY, String(size)); } catch { /* ignore */ }
-    this.setState({
+    lsSet(LS_MOCK_KEY, this._instanceId, String(size));
+    this.setState(prev => ({
       mockSize: size,
-      graphService: new MockGraphService(size) as unknown as GraphService,
-    });
+      graphService: new MockGraphService(size, this._buildFilterOptions()) as unknown as GraphService,
+      serviceGen: prev.serviceGen + 1,
+    }));
   }
 
   private _toggleView = (): void => {
     this.setState(prev => {
       const newView: 'directory' | 'orgchart' = prev.currentView === 'directory' ? 'orgchart' : 'directory';
-      try { localStorage.setItem(LS_VIEW_KEY, newView); } catch { /* ignore */ }
+      lsSet(LS_VIEW_KEY, this._instanceId, newView);
       return { currentView: newView };
     });
-  }
-
-  private _exportPdf = (): void => {
-    if (this.state.currentView === 'directory') {
-      this._directoryRef.current?.exportPdf();
-    } else {
-      this._orgChartRef.current?.exportPdf();
-    }
   }
 
   private _openSettings = (): void => {
@@ -186,16 +208,12 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
   }
 
   private _saveSettings = (settings: IUserSettings): void => {
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify(settings));
-    } catch {
-      // ignore storage errors
-    }
+    lsSet(LS_KEY, this._instanceId, JSON.stringify(settings));
     this.setState({ userSettings: settings, isSettingsOpen: false });
   }
 
   public render(): React.ReactElement<ISmartOrgChartProps> {
-    const { currentView, isSettingsOpen, graphService, userSettings, mockSize } = this.state;
+    const { currentView, isSettingsOpen, graphService, userSettings, mockSize, serviceGen } = this.state;
     const { theme, defaultLayout, logoUrl, companyName } = this.props;
     const meta        = VIEW_META[currentView];
     const resolvedLogoUrl = (() => {
@@ -243,13 +261,6 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
               className={styles.actionBtn}
             />
             <IconButton
-              iconProps={{ iconName: 'Download' }}
-              title="Export to PDF"
-              ariaLabel="Export to PDF"
-              onClick={this._exportPdf}
-              className={styles.actionBtn}
-            />
-            <IconButton
               iconProps={{ iconName: 'Settings' }}
               title="Preferences"
               ariaLabel="Open preferences panel"
@@ -262,8 +273,10 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
         <div className={styles.content}>
           {currentView === 'directory' && graphService && (
             <EmployeeDirectory
+              key={`dir-${serviceGen}`}
               ref={this._directoryRef}
               graphService={graphService}
+              instanceId={this._instanceId}
               alphabetFilterField={userSettings.alphabetFilterField}
               cardSize={userSettings.cardSize}
               showEmail={userSettings.showEmail}
@@ -277,8 +290,10 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
 
           {currentView === 'orgchart' && graphService && (
             <OrgChart
+              key={`org-${serviceGen}`}
               ref={this._orgChartRef}
               graphService={graphService}
+              instanceId={this._instanceId}
               topLevelUser={this.props.topLevelUser}
               levelsBelow={this.props.levelsBelow}
               levelsAbove={userSettings.levelsAbove}
@@ -305,8 +320,8 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
           settings={userSettings}
           onDismiss={this._closeSettings}
           onSave={this._saveSettings}
-          mockSize={this.props.useDemoData ? mockSize : undefined}
-          onMockSizeChange={this.props.useDemoData ? this._setMockSize : undefined}
+          mockSize={this._isDemoMode() ? mockSize : undefined}
+          onMockSizeChange={this._isDemoMode() ? this._setMockSize : undefined}
         />
       </div>
     );
