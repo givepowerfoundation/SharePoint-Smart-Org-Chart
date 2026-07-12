@@ -6,8 +6,6 @@ export interface IOrgChartProps {
   topLevelUser: string;
   levelsBelow: number;
   levelsAbove: number;
-  showEmail: boolean;
-  showPhone: boolean;
   showDepartment: boolean;
   showOffice: boolean;
   theme: OrgChartTheme;

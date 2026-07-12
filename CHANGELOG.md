@@ -47,8 +47,8 @@ All notable changes to Smart Org Chart are documented here.
 
 ### Changed
 - **Zoom minimum lowered to 25%** — the org chart can now be zoomed out to 25% (previously 40%), giving more room to view large hierarchies.
-- **Expand All now auto-fits zoom** — after expanding the full organisation tree, the view automatically zooms to fit the newly loaded content.
-- **Connector lines end at card edges** — the horizontal connector bar in the vertical tree now ends at the centre of the leftmost and rightmost cards in each row, rather than extending to the full sub-tree width.
+- **Expand All now auto-fits zoom** — after expanding the full organization tree, the view automatically zooms to fit the newly loaded content.
+- **Connector lines end at card edges** — the horizontal connector bar in the vertical tree now ends at the center of the leftmost and rightmost cards in each row, rather than extending to the full sub-tree width.
 - **Large tree horizontal scrolling fixed** — the full tree is now accessible by scrolling left and right after Expand All, including nodes at the far left and right of wide org charts.
 
 ### Removed

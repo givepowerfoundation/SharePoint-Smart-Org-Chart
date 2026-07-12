@@ -60,7 +60,10 @@ export class GraphService {
   private _upnToObjectId:   Map<string, string> = new Map();     // upn → AAD object id
   private _presenceCache:   Map<string, PresenceAvailability> = new Map();
   private _presenceExpiry = 0;
+  private _presenceFailedUntil = 0;                              // back-off after a presence permission failure
   private readonly _PRESENCE_TTL = 60_000;
+  private readonly _PRESENCE_RETRY = 15 * 60_000;
+  private _prefilterUsers: IGraphUser[] | null = null;           // full fetched list, before user filters
 
   constructor(
     client: SPHttpClient,
@@ -114,6 +117,7 @@ export class GraphService {
       try {
         const users = await this._fetchAllUsersFromGraph();
         if (users.length === 0) throw new Error('Graph API returned 0 users');
+        this._prefilterUsers = users;
         return this._applyUserFilters(users);
       } catch (err) {
         if (this._dataSource === 'graph') throw err;
@@ -124,8 +128,9 @@ export class GraphService {
     }
 
     // SharePoint Search path (primary or fallback)
-    const users = await this._fetchAllUsers();
-    return this._applyUserFilters(await this._supplementUnlicensedReports(users));
+    const users = await this._supplementUnlicensedReports(await this._fetchAllUsers());
+    this._prefilterUsers = users;
+    return this._applyUserFilters(users);
   }
 
   protected _applyUserFilters(users: IGraphUser[]): IGraphUser[] {
@@ -216,6 +221,7 @@ export class GraphService {
   // userIds falls back to all known users.
   public async getPresence(userIds?: string[]): Promise<Map<string, PresenceAvailability>> {
     if (!this._graphClient) return new Map();
+    if (Date.now() < this._presenceFailedUntil) return this._presenceCache;
 
     if (this._upnToObjectId.size === 0) await this._fetchObjectIdMap();
 
@@ -245,12 +251,15 @@ export class GraphService {
           .version('v1.0')
           .post({ ids: objectIds.slice(i, i + CHUNK) });
         const presences: Array<{ id: string; availability: string }> = response?.value || [];
+        this._presenceFailedUntil = 0;
         for (const p of presences) {
           const upn = reverseMap.get(p.id);
           if (upn) this._presenceCache.set(upn, this._normalizeAvailability(p.availability));
         }
       } catch {
-        // Presence.Read.All not yet approved or unavailable — return empty
+        // Presence.Read.All not yet approved or unavailable — back off so the
+        // 60-second polls don't hammer Graph with a permanently failing call
+        this._presenceFailedUntil = Date.now() + this._PRESENCE_RETRY;
         break;
       }
     }
@@ -341,9 +350,9 @@ export class GraphService {
     const managerIds = Array.from(new Set<string>(this._pendingManagerIds.values()));
     const newUsers: IGraphUser[] = [];
 
-    for (const managerId of managerIds) {
+    const processManager = async (managerId: string): Promise<void> => {
       try {
-        const response = await this._graphClient
+        const response = await (this._graphClient as MSGraphClientV3)
           .api(`/users/${encodeURIComponent(managerId)}/directReports`)
           .version('v1.0')
           .select('id,displayName,mail,jobTitle,department,officeLocation,mobilePhone,businessPhones,userPrincipalName,accountEnabled,userType')
@@ -357,11 +366,13 @@ export class GraphService {
           accountEnabled?: boolean; userType?: string;
         }> = response?.value || [];
 
+        // The loop below runs synchronously after the await, so concurrent
+        // managers sharing a report can't both pass the knownIds check
         for (const rep of reports) {
           const upn  = (rep.userPrincipalName || '').toLowerCase();
           const mail = (rep.mail || '').toLowerCase();
           const id   = upn || mail || rep.id?.toLowerCase() || '';
-          if (!id || knownIds.has(upn) || knownIds.has(mail)) continue;
+          if (!id || knownIds.has(id) || knownIds.has(upn) || knownIds.has(mail)) continue;
 
           knownIds.add(id);
           if (mail) knownIds.add(mail);
@@ -386,6 +397,12 @@ export class GraphService {
       } catch {
         // Manager not found in Graph (external user, deleted account, etc.) — skip
       }
+    };
+
+    // One request per manager gets slow in large orgs — run a small pool in parallel
+    const CONCURRENCY = 8;
+    for (let i = 0; i < managerIds.length; i += CONCURRENCY) {
+      await Promise.all(managerIds.slice(i, i + CONCURRENCY).map(processManager));
     }
 
     return newUsers.length > 0
@@ -515,29 +532,55 @@ export class GraphService {
   }
 
   private _buildMaps(users: IGraphUser[]): void {
+    // Resolve manager references against ALL fetched users (before the admin
+    // user filters), so a report whose manager is hidden by a filter can be
+    // bridged to the nearest visible ancestor instead of orphaning the branch.
+    const allUsers = this._prefilterUsers && this._prefilterUsers.length >= users.length
+      ? this._prefilterUsers
+      : users;
+
     // Display name is a last-resort manager lookup (SP Search sometimes stores
     // only the manager's name). Skip names shared by multiple users — guessing
     // would silently attach reports to the wrong person.
     const nameCount: { [key: string]: number } = {};
-    for (const user of users) {
+    for (const user of allUsers) {
       const dn = user.displayName.toLowerCase();
       nameCount[dn] = (nameCount[dn] || 0) + 1;
     }
 
     const canonicalId: { [key: string]: string } = {};
-    for (const user of users) {
+    for (const user of allUsers) {
       canonicalId[user.id] = user.id;
       if (user.mail) canonicalId[user.mail.toLowerCase()] = user.id;
       const dn = user.displayName.toLowerCase();
       if (nameCount[dn] === 1) canonicalId[dn] = user.id;
     }
 
-    this._childrenMap.clear();
-    this._managerMap.clear();
-    for (const user of users) {
+    // Raw manager edges across all fetched users. Self-managed accounts
+    // (common for CEOs in Azure AD) are dropped here — without this guard a
+    // user renders as their own child and Expand All never terminates.
+    const rawManagerOf = new Map<string, string>();
+    for (const user of allUsers) {
       const rawMgr = this._pendingManagerIds.get(user.id);
       if (!rawMgr) continue;
       const mgrId = canonicalId[rawMgr] || rawMgr;
+      if (mgrId !== user.id) rawManagerOf.set(user.id, mgrId);
+    }
+
+    const visibleIds = new Set(users.map(u => u.id));
+
+    this._childrenMap.clear();
+    this._managerMap.clear();
+    for (const user of users) {
+      // Walk up through hidden managers to the nearest visible one; the
+      // visited set stops manager cycles (A→B→A) from looping forever
+      let mgrId = rawManagerOf.get(user.id);
+      const visited = new Set<string>([user.id]);
+      while (mgrId && !visibleIds.has(mgrId) && !visited.has(mgrId)) {
+        visited.add(mgrId);
+        mgrId = rawManagerOf.get(mgrId);
+      }
+      if (!mgrId || !visibleIds.has(mgrId) || mgrId === user.id) continue;
       this._managerMap.set(user.id, mgrId);
       if (!this._childrenMap.has(mgrId)) this._childrenMap.set(mgrId, []);
       (this._childrenMap.get(mgrId) as IGraphUser[]).push(user);
@@ -549,12 +592,13 @@ export class GraphService {
       const rawDotted = this._pendingDottedIds.get(user.id);
       if (!rawDotted) continue;
       const dottedId = canonicalId[rawDotted];
-      if (!dottedId || dottedId === user.id) continue; // unresolvable or self-reference
+      if (!dottedId || dottedId === user.id || !visibleIds.has(dottedId)) continue; // unresolvable, hidden, or self-reference
       user.dottedManagerId = dottedId;
       if (!this._dottedReportsMap.has(dottedId)) this._dottedReportsMap.set(dottedId, []);
       (this._dottedReportsMap.get(dottedId) as IGraphUser[]).push(user);
     }
     this._pendingDottedIds.clear();
+    this._prefilterUsers = null;
   }
 
   private _rowToUser(cells: Array<{ Key: string; Value: string }>): IGraphUser | null {

@@ -5,7 +5,7 @@ import { SearchBox } from '@fluentui/react/lib/SearchBox';
 import { Dropdown, IDropdownOption } from '@fluentui/react/lib/Dropdown';
 import { IGraphUser, PresenceAvailability } from '../../../../services/GraphService';
 import { IEmployeeDirectoryProps } from './IEmployeeDirectoryProps';
-import { exportDirectoryToPdf, exportDirectoryToExcel } from '../../../../services/PdfExportService';
+import { exportDirectoryToExcel } from '../../../../services/PdfExportService';
 import { PRESENCE_COLOR, getInitials } from '../personUtils';
 import styles from './EmployeeDirectory.module.scss';
 
@@ -47,6 +47,7 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
   private _processingPhotos = false;
   private _mounted = false;
   private _presenceInterval: number | null = null;
+  private _presenceDebounce: number | null = null;
 
   constructor(props: IEmployeeDirectoryProps) {
     super(props);
@@ -81,8 +82,13 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
     ) {
       const paged = this._getCurrentPageUsers();
       this._enqueuePhotos(paged.map(u => u.id));
-      // Presence for the newly visible page (cheap — TTL cache skips known users)
-      this._refreshPresence().catch(() => { /* ignore */ });
+      // Presence for the newly visible page — debounced so every search
+      // keystroke doesn't fire a Graph call for the transient page
+      if (this._presenceDebounce !== null) window.clearTimeout(this._presenceDebounce);
+      this._presenceDebounce = window.setTimeout(() => {
+        this._presenceDebounce = null;
+        this._refreshPresence().catch(() => { /* ignore */ });
+      }, 500);
     }
   }
 
@@ -91,6 +97,10 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
     if (this._presenceInterval !== null) {
       window.clearInterval(this._presenceInterval);
       this._presenceInterval = null;
+    }
+    if (this._presenceDebounce !== null) {
+      window.clearTimeout(this._presenceDebounce);
+      this._presenceDebounce = null;
     }
   }
 
@@ -109,11 +119,6 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
     const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
     const safePage = Math.min(this.state.currentPage, totalPages);
     return filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
-  }
-
-  public exportPdf(): void {
-    const { showEmail, showPhone, showDepartment, showOffice } = this.props;
-    exportDirectoryToPdf(this._getFilteredUsers(), { showEmail, showPhone, showDepartment, showOffice });
   }
 
   public exportExcel(): void {
@@ -142,14 +147,24 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
 
   private async _drainPhotoQueue(): Promise<void> {
     this._processingPhotos = true;
+    // Batch setState calls — one render per 10 photos instead of one per photo
+    let batch: { [id: string]: string | null } = {};
+    const flush = (): void => {
+      const toApply = batch;
+      batch = {};
+      if (this._mounted && Object.keys(toApply).length > 0) {
+        this.setState(prev => ({ photos: { ...prev.photos, ...toApply } }));
+      }
+    };
     while (this._photoQueue.length > 0 && this._mounted) {
       const id = this._photoQueue.shift();
       if (!id) break;
       this._photoQueueSet.delete(id);
-      if (id in this.state.photos) continue;
-      const url = await this.props.graphService.getUserPhoto(id);
-      if (this._mounted) this.setState(prev => ({ photos: { ...prev.photos, [id]: url } }));
+      if (id in this.state.photos || id in batch) continue;
+      batch[id] = await this.props.graphService.getUserPhoto(id);
+      if (Object.keys(batch).length >= 10) flush();
     }
+    flush();
     this._processingPhotos = false;
   }
 
@@ -320,13 +335,13 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
       <table className={styles.listTable}>
         <thead>
           <tr className={styles.listHead}>
-            <th className={styles.listTh}>Name</th>
-            <th className={styles.listTh}>Job Title</th>
-            {showDepartment && <th className={styles.listTh}>Department</th>}
-            {showOffice && <th className={styles.listTh}>Office</th>}
-            {showEmail && <th className={styles.listTh}>Email</th>}
-            {showPhone && <th className={styles.listTh}>Phone</th>}
-            <th className={styles.listTh} />
+            <th scope="col" className={styles.listTh}>Name</th>
+            <th scope="col" className={styles.listTh}>Job Title</th>
+            {showDepartment && <th scope="col" className={styles.listTh}>Department</th>}
+            {showOffice && <th scope="col" className={styles.listTh}>Office</th>}
+            {showEmail && <th scope="col" className={styles.listTh}>Email</th>}
+            {showPhone && <th scope="col" className={styles.listTh}>Phone</th>}
+            <th scope="col" className={styles.listTh} />
           </tr>
         </thead>
         <tbody>

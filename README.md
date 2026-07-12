@@ -29,7 +29,7 @@ A SharePoint Framework web part that gives any SharePoint Online page a searchab
 |---|---|
 | **Three layouts** | Drill-Down, Top Down, and Left to Right |
 | **Lazy expand** | Branches fetched from Graph on demand when expanded |
-| **Expand All** | Loads and expands the full organisation from Microsoft Graph in one click |
+| **Expand All** | Loads and expands the full organization from Microsoft Graph in one click |
 | **View from person** | Re-root the chart at any person without changing the admin configuration |
 | **Department filter** | Narrow the chart to one or more departments |
 | **User type filter** | Show or hide members and guest users independently |

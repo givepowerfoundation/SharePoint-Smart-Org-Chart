@@ -85,8 +85,6 @@ function readCurrentView(fallback: 'directory' | 'orgchart', instanceId: string)
 }
 
 export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOrgChartState> {
-  private _directoryRef = React.createRef<EmployeeDirectory>();
-  private _orgChartRef  = React.createRef<OrgChart>();
   private _instanceId: string;
 
   constructor(props: ISmartOrgChartProps) {
@@ -274,7 +272,6 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
           {currentView === 'directory' && graphService && (
             <EmployeeDirectory
               key={`dir-${serviceGen}`}
-              ref={this._directoryRef}
               graphService={graphService}
               instanceId={this._instanceId}
               alphabetFilterField={userSettings.alphabetFilterField}
@@ -291,14 +288,11 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
           {currentView === 'orgchart' && graphService && (
             <OrgChart
               key={`org-${serviceGen}`}
-              ref={this._orgChartRef}
               graphService={graphService}
               instanceId={this._instanceId}
               topLevelUser={this.props.topLevelUser}
               levelsBelow={this.props.levelsBelow}
               levelsAbove={userSettings.levelsAbove}
-              showEmail={userSettings.showEmail}
-              showPhone={userSettings.showPhone}
               showDepartment={userSettings.showDepartment}
               showOffice={userSettings.showOffice}
               theme={theme}

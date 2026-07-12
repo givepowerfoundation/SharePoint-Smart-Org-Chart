@@ -103,8 +103,8 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
       dottedLineAttribute: this.properties.dottedLineAttribute || '',
       excludedAccounts:       this.properties.excludedAccounts       || '',
       restrictToTenantDomain: this.properties.restrictToTenantDomain || false,
-      hideGuestUsers:         this.properties.hideGuestUsers         || false,
-      hideDisabledAccounts:   this.properties.hideDisabledAccounts   || false,
+      hideGuestUsers:         this.properties.hideGuestUsers         ?? true,
+      hideDisabledAccounts:   this.properties.hideDisabledAccounts   ?? true,
       hideNoJobTitle:         this.properties.hideNoJobTitle         || false,
       hideNoDepartment:       this.properties.hideNoDepartment       || false,
     });

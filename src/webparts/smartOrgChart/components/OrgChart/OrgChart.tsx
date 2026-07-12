@@ -66,6 +66,25 @@ function markNodeLoaded(root: IOrgNode, targetId: string): IOrgNode {
   return { ...root, directReports: root.directReports.map(c => markNodeLoaded(c, targetId)) };
 }
 
+// Every user id currently in the tree. Used to drop fetched reports that are
+// already present (self-managed accounts or manager cycles in Azure AD) —
+// without this, expanding re-injects an ancestor and recursion never ends.
+function collectTreeIds(node: IOrgNode, into: Set<string> = new Set<string>()): Set<string> {
+  into.add(node.user.id);
+  node.directReports.forEach(c => collectTreeIds(c, into));
+  return into;
+}
+
+// Injects children for many nodes in a single traversal — one full-tree clone
+// per batch instead of one per node (injectChildren is O(tree) per call).
+function injectChildrenBatch(root: IOrgNode, childrenById: Map<string, IOrgNode[]>): IOrgNode {
+  const injected = childrenById.get(root.user.id);
+  if (injected !== undefined) {
+    return { ...root, childrenLoaded: true, isExpanded: true, directReports: injected };
+  }
+  return { ...root, directReports: root.directReports.map(c => injectChildrenBatch(c, childrenById)) };
+}
+
 function countSearchMatches(node: IOrgNode, q: string, isVisible: (u: IGraphUser) => boolean): number {
   if (!isVisible(node.user)) return 0;
   const self = matchesQuery(node, q) ? 1 : 0;
@@ -73,14 +92,7 @@ function countSearchMatches(node: IOrgNode, q: string, isVisible: (u: IGraphUser
 }
 
 function matchesQuery(node: IOrgNode, lowerQ: string): boolean {
-  if (!lowerQ) return false;
-  const { displayName, jobTitle, department, mail } = node.user;
-  return (
-    (displayName || '').toLowerCase().includes(lowerQ) ||
-    (jobTitle || '').toLowerCase().includes(lowerQ) ||
-    (department || '').toLowerCase().includes(lowerQ) ||
-    (mail || '').toLowerCase().includes(lowerQ)
-  );
+  return matchUserQuery(node.user, lowerQ);
 }
 
 function matchUserQuery(user: IGraphUser, lowerQ: string): boolean {
@@ -184,6 +196,10 @@ const PersonCard: React.FC<IPersonCardProps> = ({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Land keyboard/screen-reader focus inside the dialog when it opens
+  const closeBtnRef = React.useRef<HTMLButtonElement>(null);
+  React.useEffect(() => { if (closeBtnRef.current) closeBtnRef.current.focus(); }, []);
+
   // Transient "Copied!" feedback for the copy buttons
   const mountedRef = React.useRef(true);
   React.useEffect(() => () => { mountedRef.current = false; }, []);
@@ -216,10 +232,13 @@ const PersonCard: React.FC<IPersonCardProps> = ({
         className={styles.personCard}
         style={{ background: cardBg, borderColor: borderClr }}
         onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Profile: ${user.displayName}`}
       >
-        {/* Coloured header band */}
+        {/* Colored header band */}
         <div className={styles.personCardHeader} style={{ background: deptColor }}>
-          <button className={styles.personCardClose} onClick={onClose} title="Close">
+          <button ref={closeBtnRef} className={styles.personCardClose} onClick={onClose} title="Close" aria-label="Close profile">
             <Icon iconName="Cancel" />
           </button>
           {photo
@@ -407,7 +426,7 @@ const FilterPanel: React.FC<IFilterPanelProps> = ({ filterMembers, filterGuests,
   return (
     <div className={styles.filterPanel}>
       <div className={styles.filterPanelTitle}>Show in chart</div>
-      {items.map(({ key, label, count, checked }) => count >= 0 && (
+      {items.map(({ key, label, count, checked }) => (
         <label key={key} className={styles.filterItem}>
           <input type="checkbox" checked={checked} onChange={() => onToggle(key)} className={styles.filterCheckbox} />
           <span className={styles.filterLabel}>{label}</span>
@@ -549,7 +568,6 @@ interface IOrgTreeProps {
   presenceMap: Map<string, PresenceAvailability>;
   showDepartment: boolean;
   showOffice: boolean;
-  chartLayout: ChartLayout;
   expandingNodes: Set<string>;
   searchQuery: string;
   theme: OrgChartTheme;
@@ -562,7 +580,7 @@ interface IOrgTreeProps {
 }
 
 const OrgTree: React.FC<IOrgTreeProps> = ({
-  node, photos, presenceMap, showDepartment, showOffice, chartLayout,
+  node, photos, presenceMap, showDepartment, showOffice,
   expandingNodes, searchQuery, theme, isVisible, parentUser, compactCards,
   onToggle, onCardClick, onFocus
 }) => {
@@ -599,7 +617,6 @@ const OrgTree: React.FC<IOrgTreeProps> = ({
               presenceMap={presenceMap}
               showDepartment={showDepartment}
               showOffice={showOffice}
-              chartLayout={chartLayout}
               expandingNodes={expandingNodes}
               searchQuery={searchQuery}
               theme={theme}
@@ -756,6 +773,16 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
   private _panDistance      = 0;
   private _lastPanEndTime   = 0;
   private _rootPickerRef    = React.createRef<HTMLDivElement>();
+  // Tree snapshot taken when a search starts, restored when it is cleared.
+  // Any other tree mutation invalidates it (set to null).
+  private _preSearchRoot: IOrgNode | null = null;
+  // Per-render tree scans are cached by reference — the tree is immutable,
+  // so a changed rootNode/allUsers reference is the only invalidation signal
+  private _treeScanFor: IOrgNode | null = null;
+  private _treeCounts: IFilterCounts = { members: 0, guests: 0, disabled: 0 };
+  private _uniqueDepts: Map<string, number> = new Map();
+  private _statsFor: IGraphUser[] | null = null;
+  private _stats: { total: number; members: number; guests: number; depts: number } | null = null;
 
   constructor(props: IOrgChartProps) {
     super(props);
@@ -800,6 +827,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       this._scrollRef.current.addEventListener('touchmove', this._handleTouchMoveDirect, { passive: false });
     }
     document.addEventListener('mousedown', this._handleOutsideClick);
+    document.addEventListener('keydown', this._handleEscKey);
   }
 
   public async componentDidUpdate(prev: IOrgChartProps, prevState: IOrgChartLocalState): Promise<void> {
@@ -816,6 +844,30 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
         drillReportCounts: new Map(),
       });
       if (this.props.graphService && this.props.topLevelUser) await this._loadTree();
+    }
+
+    // Admin property pane edits re-render (not remount) this component, so
+    // defaults and feature flags must be applied to live state here. Turning
+    // a feature off also resets its persisted state — otherwise users could
+    // be stuck in a filter or layout they no longer have a control for.
+    if (prev.defaultLayout !== this.props.defaultLayout) {
+      this._setLayout(this.props.defaultLayout || 'drill');
+    }
+    if (prev.defaultZoom !== this.props.defaultZoom) {
+      this.setState({ zoomLevel: this.props.defaultZoom > 0 ? this.props.defaultZoom : 1 },
+        () => { if (!(this.props.defaultZoom > 0)) this._autoFitZoom(); });
+    }
+    if (prev.enableLayoutToggle && !this.props.enableLayoutToggle) {
+      this._setLayout(this.props.defaultLayout || 'drill');
+    }
+    if (prev.enableUserFilter && !this.props.enableUserFilter) {
+      this.setState({ filterMembers: true, filterGuests: true });
+    }
+    if (prev.enableDeptFilter && !this.props.enableDeptFilter) {
+      this.setState({ filterDepartments: new Set() });
+    }
+    if (prev.enableStats && !this.props.enableStats) {
+      this.setState({ showStats: false });
     }
 
     if (
@@ -840,9 +892,19 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       prevState.drillPath         !== drillPath         ||
       prevState.focusedUser       !== focusedUser
     )) {
-      const focusEmail = chartLayout === 'drill'
-        ? (drillPath.length > 0 ? drillPath[drillPath.length - 1].mail ?? null : null)
-        : (focusedUser?.mail ?? null);
+      // Only persist a focus once the user actually navigated away from the
+      // default position — otherwise every page view stamps ?socFocus into
+      // the URL (and two instances on one page fight over the same param)
+      const { rootNode } = this.state;
+      const atDefault = chartLayout === 'drill'
+        ? drillPath.length === 0 ||
+          (drillPath.length === 1 && (!rootNode || drillPath[0].id === rootNode.user.id))
+        : !focusedUser;
+      const focusEmail = atDefault
+        ? null
+        : chartLayout === 'drill'
+          ? (drillPath[drillPath.length - 1].mail ?? null)
+          : (focusedUser?.mail ?? null);
       saveChartState(this.props.instanceId, {
         chartLayout, showStats, filterMembers, filterGuests,
         filterDepartments: Array.from(filterDepartments),
@@ -859,6 +921,15 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       this._scrollRef.current.removeEventListener('touchmove', this._handleTouchMoveDirect);
     }
     document.removeEventListener('mousedown', this._handleOutsideClick);
+    document.removeEventListener('keydown', this._handleEscKey);
+  }
+
+  private _handleEscKey = (e: KeyboardEvent): void => {
+    if (e.key !== 'Escape') return;
+    const { showFilters, showDeptFilter, showLayoutPicker } = this.state;
+    if (showFilters || showDeptFilter || showLayoutPicker) {
+      this.setState({ showFilters: false, showDeptFilter: false, showLayoutPicker: false });
+    }
   }
 
   private _handleOutsideClick = (e: MouseEvent): void => {
@@ -926,6 +997,15 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
 
   private _onSearchChange = (value: string): void => {
     const q = value.trim().toLowerCase();
+    const hadQ = !!this.state.searchQuery.trim();
+    // Snapshot the tree when a search starts so clearing it restores the
+    // user's expand/collapse state instead of leaving everything expanded
+    if (q && !hadQ && this.state.chartLayout !== 'drill') {
+      this._preSearchRoot = this.state.rootNode;
+    }
+    const restoreRoot = (!q && hadQ) ? this._preSearchRoot : null;
+    if (!q) this._preSearchRoot = null;
+
     this.setState(prev => {
       const updates: Partial<IOrgChartLocalState> = {
         searchQuery: value,
@@ -935,6 +1015,8 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       // Reveal matches hiding inside collapsed branches
       if (q && prev.chartLayout !== 'drill' && prev.rootNode) {
         updates.rootNode = expandToMatches(prev.rootNode, q).node;
+      } else if (restoreRoot) {
+        updates.rootNode = restoreRoot;
       }
       return updates as IOrgChartLocalState;
     });
@@ -943,6 +1025,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
   private async _loadTree(): Promise<void> {
     const { graphService, topLevelUser, levelsBelow } = this.props;
     if (!graphService) return;
+    this._preSearchRoot = null;
     this.setState({ isLoading: true, error: null });
     try {
       const [rootUser, allUsers] = await Promise.all([
@@ -1063,6 +1146,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       await Promise.all(frontier.slice(i, i + batchSize).map(async node => {
         const hasReports = await graphService.hasDirectReports(node.user.id);
         if (!hasReports && this._mounted) {
+          this._preSearchRoot = null;
           this.setState(prev => ({ rootNode: prev.rootNode ? markNodeLoaded(prev.rootNode, node.user.id) : null }));
         }
       }));
@@ -1074,14 +1158,20 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
   private _handleToggle = async (node: IOrgNode): Promise<void> => {
     const { rootNode, expandingNodes } = this.state;
     if (!rootNode) return;
+    this._preSearchRoot = null;
     if (node.isExpanded) { this.setState({ rootNode: setNodeExpanded(rootNode, node.user.id, false) }); return; }
     if (!node.childrenLoaded && this.props.graphService) {
       const s1 = new Set(expandingNodes); s1.add(node.user.id);
       this.setState({ expandingNodes: s1 });
       try {
-        const reports  = await this.props.graphService.getDirectReports(node.user.id);
-        const children = reports.map(u => ({ user: u, directReports: [], isExpanded: false, childrenLoaded: false, level: node.level + 1 }));
+        const reports = await this.props.graphService.getDirectReports(node.user.id);
         if (this._mounted && this.state.rootNode) {
+          // Drop reports already in the tree — a self-managed account or
+          // manager cycle would otherwise re-inject an ancestor forever
+          const treeIds  = collectTreeIds(this.state.rootNode);
+          const children = reports
+            .filter(u => !treeIds.has(u.id))
+            .map(u => ({ user: u, directReports: [], isExpanded: false, childrenLoaded: false, level: node.level + 1 }));
           const s2      = new Set(this.state.expandingNodes); s2.delete(node.user.id);
           const newRoot = injectChildren(this.state.rootNode, node.user.id, children);
           this.setState({ rootNode: newRoot, expandingNodes: s2 });
@@ -1096,19 +1186,27 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     }
   }
 
-  private _handleCollapseAll = (): void => { if (this.state.rootNode) this.setState({ rootNode: collapseAll(this.state.rootNode) }); }
+  private _handleCollapseAll = (): void => {
+    this._preSearchRoot = null;
+    if (this.state.rootNode) this.setState({ rootNode: collapseAll(this.state.rootNode) });
+  }
 
   // Expand All: first expand already-loaded nodes for immediate feedback,
   // then BFS-load every unloaded frontier level until the full tree is in memory.
   private _handleExpandLoaded = async (): Promise<void> => {
     if (!this.state.rootNode) return;
+    this._preSearchRoot = null;
     let root = expandLoaded(this.state.rootNode);
     this.setState({ rootNode: root });
 
     const gs = this.props.graphService;
     if (!gs) return;
 
-    while (this._mounted) {
+    // treeIds guards against self-managed accounts and manager cycles;
+    // the level cap is a safety valve so a guard regression can't hang the browser
+    const treeIds = collectTreeIds(root);
+    const MAX_LEVELS = 50;
+    for (let level = 0; this._mounted && level < MAX_LEVELS; level++) {
       const frontier = this._getUnloadedFrontier(root);
       if (frontier.length === 0) break;
 
@@ -1122,15 +1220,19 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
             .catch(() => ({ node: n, reports: [] as IGraphUser[] }))
           )
         );
+        // Inject the whole batch in one traversal — one tree clone per batch
+        // instead of one per node (O(n²) on large orgs otherwise)
+        const childrenById = new Map<string, IOrgNode[]>();
         const newIds: string[] = [];
         for (const { node: n, reports } of results) {
-          const children: IOrgNode[] = reports.map(u => ({
+          const fresh = reports.filter(u => !treeIds.has(u.id));
+          fresh.forEach(u => treeIds.add(u.id));
+          childrenById.set(n.user.id, fresh.map(u => ({
             user: u, directReports: [], isExpanded: false, childrenLoaded: false, level: n.level + 1,
-          }));
-          root = injectChildren(root, n.user.id, children);
-          newIds.push(...reports.map(u => u.id));
+          })));
+          newIds.push(...fresh.map(u => u.id));
         }
-        root = expandLoaded(root);
+        root = expandLoaded(injectChildrenBatch(root, childrenById));
         if (this._mounted) {
           this.setState({ rootNode: root });
           if (newIds.length) this._loadPhotos(newIds);
@@ -1253,6 +1355,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     }
 
     // Full-tree mode
+    this._preSearchRoot = null;
     try {
       const [rootNode, ancestorChain] = await Promise.all([
         graphService.buildOrgTree(user.id, levelsBelow),
@@ -1347,6 +1450,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
   private _onRootPickerSelect = async (user: IGraphUser): Promise<void> => {
     const { graphService, levelsBelow } = this.props;
     if (!graphService) return;
+    this._preSearchRoot = null;
     this.setState({ rootPickerQuery: '', rootPickerResults: [], runtimeRootUser: user, isLoading: true });
     try {
       const rawRoot = await graphService.buildOrgTree(user.id, levelsBelow);
@@ -1699,13 +1803,25 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     if (!rootNode) return this._renderNoConfig();
 
     const isVisible    = this._buildIsVisible();
-    const treeCounts   = countTreeUsers(rootNode);
+    // Full-tree scans are cached by reference — renders fire on every pan/zoom
+    // state change, and the tree only changes when rootNode is replaced
+    if (this._treeScanFor !== rootNode) {
+      this._treeScanFor = rootNode;
+      this._treeCounts  = countTreeUsers(rootNode);
+      this._uniqueDepts = getUniqueDepts(rootNode);
+    }
+    const treeCounts   = this._treeCounts;
+    const uniqueDepts  = this._uniqueDepts;
     const lowerQ       = searchQuery.trim().toLowerCase();
     const matchCount   = lowerQ ? countSearchMatches(rootNode, lowerQ, isVisible) : 0;
     const activeFilters = (!filterMembers ? 1 : 0) + (!filterGuests ? 1 : 0);
-    const uniqueDepts  = getUniqueDepts(rootNode);
-    const stats        = showStats ? computeStats(allUsers) : null;
+    if (showStats && this._statsFor !== allUsers) {
+      this._statsFor = allUsers;
+      this._stats    = computeStats(allUsers);
+    }
+    const stats        = showStats ? this._stats : null;
     const isDrillMode  = chartLayout === 'drill';
+    const resetZoom    = this.props.defaultZoom > 0 ? this.props.defaultZoom : 1;
 
     const searchResults = lowerQ && allUsers.length > 0
       ? allUsers.filter(u => matchUserQuery(u, lowerQ)).slice(0, 8)
@@ -1978,7 +2094,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
               <button className={styles.zoomBtn} onClick={() => { const next = Math.min(1.5, zoomLevel + 0.1); this.setState({ zoomLevel: zoomLevel < 1 && next > 1 ? 1 : next }); }} title="Zoom in" disabled={zoomLevel >= 1.5}>
                 <Icon iconName="Add" />
               </button>
-              <button className={styles.zoomBtn} onClick={() => this.setState({ zoomLevel: 1 })} title="Reset zoom" disabled={zoomLevel === 1}>
+              <button className={styles.zoomBtn} onClick={() => this.setState({ zoomLevel: resetZoom })} title="Reset zoom" disabled={zoomLevel === resetZoom}>
                 <Icon iconName="Refresh" />
               </button>
             </div>
@@ -2007,7 +2123,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
               <Icon iconName="Home" /> Full org
             </button>
             <Icon iconName="ChevronRight" className={styles.ancestorChevron} />
-            {ancestorChain.map((ancestor, i) => (
+            {ancestorChain.map(ancestor => (
               <React.Fragment key={ancestor.id}>
                 <button
                   className={styles.ancestorLink}
@@ -2019,7 +2135,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
                   </span>
                   <span className={styles.ancestorName}>{ancestor.displayName.split(' ')[0]}</span>
                 </button>
-                {i < ancestorChain.length && <Icon iconName="ChevronRight" className={styles.ancestorChevron} />}
+                <Icon iconName="ChevronRight" className={styles.ancestorChevron} />
               </React.Fragment>
             ))}
             <span className={styles.ancestorCurrent}>
@@ -2054,7 +2170,6 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
                 presenceMap={presenceMap}
                 showDepartment={showDepartment}
                 showOffice={this.props.showOffice}
-                chartLayout={chartLayout}
                 expandingNodes={expandingNodes}
                 searchQuery={lowerQ}
                 theme={theme}

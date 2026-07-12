@@ -552,11 +552,27 @@ export class MockGraphService extends GraphService {
     this._mockUsers.sort((a, b) => a.displayName.localeCompare(b.displayName));
 
     const byEmail = new Map<string, IGraphUser>(this._mockUsers.map(u => [u.id, u]));
+
+    // Raw manager edges (self-managed rows dropped — mirrors GraphService)
+    const rawMgrOf = new Map<string, string>();
     for (const [email, , , , managerEmail] of raw) {
-      if (!managerEmail) continue;
+      if (managerEmail && managerEmail !== email) rawMgrOf.set(email, managerEmail);
+    }
+
+    for (const [email] of raw) {
       const user = byEmail.get(email);
-      const mgr  = byEmail.get(managerEmail);
-      if (!user || !mgr) continue;
+      if (!user) continue;
+      // Walk up through filtered-out managers to the nearest visible one,
+      // with a visited set to stop manager cycles — mirrors GraphService
+      let mgrEmail = rawMgrOf.get(email);
+      const visited = new Set<string>([email]);
+      while (mgrEmail && !byEmail.has(mgrEmail) && !visited.has(mgrEmail)) {
+        visited.add(mgrEmail);
+        mgrEmail = rawMgrOf.get(mgrEmail);
+      }
+      if (!mgrEmail) continue;
+      const mgr = byEmail.get(mgrEmail);
+      if (!mgr || mgr.id === user.id) continue;
       this._mockManagerMap.set(user.id, mgr.id);
       if (!this._mockChildrenMap.has(mgr.id)) this._mockChildrenMap.set(mgr.id, []);
       (this._mockChildrenMap.get(mgr.id) as IGraphUser[]).push(user);
@@ -592,22 +608,22 @@ export class MockGraphService extends GraphService {
   }
 
   public getDirectReports(userId: string): Promise<IGraphUser[]> {
-    return Promise.resolve([...(this._mockChildrenMap.get(userId) || [])]);
+    return Promise.resolve([...(this._mockChildrenMap.get(userId.toLowerCase()) || [])]);
   }
 
   public getDottedLineReports(userId: string): Promise<IGraphUser[]> {
-    return Promise.resolve([...(this._mockDottedMap.get(userId) || [])]);
+    return Promise.resolve([...(this._mockDottedMap.get(userId.toLowerCase()) || [])]);
   }
 
   public hasDirectReports(userId: string): Promise<boolean> {
-    const kids = this._mockChildrenMap.get(userId);
+    const kids = this._mockChildrenMap.get(userId.toLowerCase());
     return Promise.resolve(!!(kids && kids.length > 0));
   }
 
   public getManagerChain(userId: string, levels: number): Promise<IGraphUser[]> {
     const byId = new Map<string, IGraphUser>(this._mockUsers.map(u => [u.id, u]));
     const chain: IGraphUser[] = [];
-    let curId = userId;
+    let curId = userId.toLowerCase();
     for (let i = 0; i < levels; i++) {
       const mgrId = this._mockManagerMap.get(curId);
       if (!mgrId) break;

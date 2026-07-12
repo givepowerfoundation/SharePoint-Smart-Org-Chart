@@ -1,4 +1,3 @@
-import html2canvas from 'html2canvas';
 import { IGraphUser, IOrgNode } from './GraphService';
 
 /* ── Shared download / CSV helpers ── */
@@ -26,7 +25,8 @@ function csvRow(cells: string[]): string {
 }
 
 // UTF-8 BOM ensures Excel opens the file with correct character encoding
-const CSV_BOM = '﻿';
+// (explicit escape — a literal BOM character is invisible and easily stripped)
+const CSV_BOM = '\uFEFF';
 
 export interface IDirectoryExportOptions {
   showEmail: boolean;
@@ -52,41 +52,11 @@ function openPrintWindow(html: string): void {
   win.document.write(html);
   win.document.close();
   win.focus();
-  win.onload = () => win.print();
-}
-
-export function exportDirectoryToPdf(users: IGraphUser[], opts: IDirectoryExportOptions): void {
-  if (users.length === 0) return;
-
-  const cols: { label: string; get: (u: IGraphUser) => string }[] = [
-    { label: 'Name',      get: u => u.displayName || '' },
-    { label: 'Job Title', get: u => u.jobTitle || '' },
-  ];
-  if (opts.showDepartment) cols.push({ label: 'Department', get: u => u.department || '' });
-  if (opts.showOffice)     cols.push({ label: 'Office',     get: u => u.officeLocation || '' });
-  if (opts.showEmail)      cols.push({ label: 'Email',      get: u => u.mail || '' });
-  if (opts.showPhone)      cols.push({ label: 'Phone',      get: u => u.mobilePhone || (u.businessPhones && u.businessPhones[0]) || '' });
-
-  const headers = cols.map(c => `<th>${c.label}</th>`).join('');
-  const rows = users.map((u, i) => {
-    const cells = cols.map(c => `<td>${escHtml(c.get(u))}</td>`).join('');
-    return `<tr class="${i % 2 === 0 ? 'even' : 'odd'}">${cells}</tr>`;
-  }).join('');
-
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Employee Directory</title>
-<style>
-${BASE_STYLES}
-table { width: 100%; border-collapse: collapse; }
-th { background: #0078d4; color: #fff; text-align: left; padding: 6px 8px; font-size: 9pt; }
-td { padding: 5px 8px; font-size: 9pt; border-bottom: 1px solid #eee; vertical-align: top; }
-tr.odd td { background: #f7f9fc; }
-</style></head><body>
-<h1>Employee Directory</h1>
-<div class="subtitle">${users.length} employee${users.length !== 1 ? 's' : ''} &nbsp;·&nbsp; ${new Date().toLocaleDateString()}</div>
-<table><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>
-</body></html>`;
-
-  openPrintWindow(html);
+  // After document.write the document may already be "complete", in which
+  // case onload never fires — print directly with a beat for layout/fonts
+  const doPrint = (): void => { try { win.print(); } catch { /* window closed */ } };
+  if (win.document.readyState === 'complete') setTimeout(doPrint, 100);
+  else win.onload = doPrint;
 }
 
 export function exportDirectoryToExcel(users: IGraphUser[], opts: IDirectoryExportOptions): void {
@@ -138,45 +108,6 @@ export function exportOrgChartToCsv(rootNode: IOrgNode): void {
     `org-chart-${new Date().toISOString().slice(0, 10)}.csv`,
     'text/csv;charset=utf-8;'
   );
-}
-
-export async function exportOrgChartToPng(treeEl: HTMLElement): Promise<void> {
-  try {
-    const canvas = await html2canvas(treeEl, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-    });
-    const url = canvas.toDataURL('image/png');
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `org-chart-${new Date().toISOString().slice(0, 10)}.png`;
-    a.click();
-  } catch {
-    alert('Could not capture the org chart image. Try reducing zoom first.');
-  }
-}
-
-export function exportVCard(user: IGraphUser): void {
-  // Escape vCard special characters (backslash, comma, semicolon)
-  const esc = (s: string): string => s.replace(/\\/g, '\\\\').replace(/[,;]/g, m => `\\${m}`);
-  const parts = (user.displayName || '').split(' ').filter(p => p);
-  const first = parts[0] || '';
-  const last  = parts.length > 1 ? parts[parts.length - 1] : '';
-
-  const lines = ['BEGIN:VCARD', 'VERSION:3.0', `FN:${esc(user.displayName || '')}`, `N:${esc(last)};${esc(first)};;;`];
-  if (user.jobTitle)       lines.push(`TITLE:${esc(user.jobTitle)}`);
-  if (user.department)     lines.push(`ORG:${esc(user.department)}`);
-  if (user.mail)           lines.push(`EMAIL;TYPE=WORK:${user.mail}`);
-  if (user.businessPhones && user.businessPhones[0]) lines.push(`TEL;TYPE=WORK,VOICE:${user.businessPhones[0]}`);
-  if (user.mobilePhone)    lines.push(`TEL;TYPE=CELL:${user.mobilePhone}`);
-  if (user.officeLocation) lines.push(`ADR;TYPE=WORK:;;${esc(user.officeLocation)};;;;`);
-  lines.push('END:VCARD');
-
-  const safeName = (user.displayName || 'contact').replace(/[^\w\- ]/g, '').trim() || 'contact';
-  downloadBlob(lines.join('\r\n'), `${safeName}.vcf`, 'text/vcard;charset=utf-8;');
 }
 
 export function exportOrgChartToPdf(rootNode: IOrgNode, note?: string): void {
