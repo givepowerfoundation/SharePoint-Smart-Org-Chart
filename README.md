@@ -50,12 +50,12 @@ A SharePoint Framework web part that gives any SharePoint Online page a searchab
 
 | Feature | Detail |
 |---|---|
-| **User account filters** | Hide disabled accounts, guests, accounts without a job title or department; exclude by name/email pattern; restrict to tenant domain |
+| **User account filters** | Hide disabled accounts, guests, accounts without a job title or department; exclude by name/email pattern; restrict to tenant domain — reports of a hidden manager are re-linked to the next visible manager, so hiding an account never orphans part of the org chart |
 | **Themes** | Modern, Minimal, Corporate, and Dark |
 | **Configurable data source** | Graph API (real-time), SharePoint Search (legacy), or Auto (Graph with SP Search fallback) |
 | **User preferences** | Per-user card size, font size, visible fields, compact mode — saved to `localStorage` |
 | **Configurable zoom & font size** | Admin sets defaults; users can override font size in their own preferences |
-| **Demo mode** | Built-in mock data (150 / 500 / 1,000 people) — no Graph permissions needed |
+| **Demo mode** | Built-in mock data (150 / 500 / 1,000 people) — no Graph permissions needed; auto-fills Top-Level User with the sample CEO if it's empty |
 
 ![Employee Directory card grid view](docs/screenshots/03-directory-overview.png)
 
@@ -153,7 +153,7 @@ Cleans prior artifacts, bundles in production mode, and produces `sharepoint/sol
 
 ## Configuration
 
-All settings below are configured in the web part property pane (edit the page → click the web part → pencil icon). They apply to everyone viewing that page.
+All settings below are configured in the web part property pane (edit the page → click the web part → pencil icon). They apply to everyone viewing that page, and most take effect immediately — no page reload required.
 
 ### General
 
@@ -301,7 +301,6 @@ SharePointSmartOrgChart/
 | `@microsoft/sp-webpart-base` | SPFx web part base class and property pane |
 | `@fluentui/react` | Microsoft Fluent UI component library (8.x) |
 | `react` / `react-dom` | UI rendering (17.0.1) |
-| `html2canvas` | DOM-to-canvas capture used for PDF export |
 | `puppeteer-core` | Headless browser for the demo screenshot tool (dev only) |
 
 ---

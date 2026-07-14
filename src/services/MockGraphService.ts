@@ -466,6 +466,10 @@ const RAW_BASE: RawUser[] = [
   ['guest.auditor@contoso.com', 'Priya Auditor',     'External Auditor',                         'Finance',         't.brown@contoso.com',     'Remote',           '',               true, 'Guest'],
 ];
 
+// The demo CEO (always RAW_BASE's first, L0 entry, at every company size) —
+// used to auto-fill the Top-Level User property when Use Demo Data is enabled
+export const DEMO_CEO_EMAIL: string = RAW_BASE[0][0];
+
 // ── Generator ─────────────────────────────────────────────────────────────────
 // Builds a deterministic dataset of approximately targetCount users by adding
 // generated team leads and ICs on top of the hand-authored base data.

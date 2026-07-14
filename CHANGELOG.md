@@ -4,6 +4,29 @@ All notable changes to Smart Org Chart are documented here.
 
 ---
 
+## [1.3.0] — 2026-07-14
+
+### Added
+- **Demo Data auto-fills the top-level user** — turning on **Use Demo Data** in the property pane now fills in **Top-Level User** with the sample CEO automatically when the field is empty, so the demo works immediately with no typing required. An admin-configured value is never overwritten.
+
+### Changed
+- **Admin property pane changes now apply immediately** — switching the default org chart layout, default zoom, or any "Org Chart Features" toggle (Find Me, layout toggle, stats bar, department filter, user type filter) in the property pane now takes effect live. Previously some of these required a page reload, and turning a filter or layout toggle off could leave a user stuck with a persisted filter and no control to clear it — turning a toggle off now also resets its state.
+- **Faster loading for large organizations on the SharePoint Search data source** — the fallback lookup that supplements unlicensed users' direct reports now issues requests to Microsoft Graph in parallel instead of one at a time, cutting initial load time significantly for tenants with many managers.
+- **Faster Expand All and Employee Directory photo loading** — profile photos in the Employee Directory now batch into the UI instead of triggering a re-render per photo, and Org Chart's Expand All injects each newly loaded batch of the tree in a single pass instead of re-cloning the whole tree per node.
+- **Keyboard accessibility** — Escape now closes the org chart's layout, department, and user-type filter popups (previously only the person profile card responded to Escape). The profile card is also now exposed as an accessible dialog, with focus moved to its close button when it opens.
+
+### Fixed
+- **Org chart could hang on self-managed or circular manager relationships** — an Azure AD account that is its own manager (common for CEOs) or a short manager cycle (A → B → A) could make the org chart render a user as their own descendant, and "Expand All" would loop indefinitely instead of completing. Both cases are now detected and handled safely.
+- **Hiding a manager silently deleted their entire reporting branch** — when a User Filter (excluded pattern, hidden job title/department, etc.) hid a manager, everyone who reported to them disappeared from the org chart instead of just the directory. Their reports are now re-linked to the next visible manager above them, so the chart's structure is preserved.
+- **Zoom "Reset" ignored the admin-configured default zoom** — the reset button always returned to 100% even when the property pane specified a different default (e.g. 75%). It now returns to whichever default the admin has configured.
+- **Unnecessary `?socFocus` URL parameter on every page view** — simply opening the org chart at its default position wrote a focus parameter into the page URL and browser storage, which could also collide between two web part instances on the same page. The parameter now only appears once a user actually navigates away from the default view, and clears again when they return to it.
+- **Presence lookups retried a failing permission every 60 seconds** — if the `Presence.Read.All` permission had not been approved, the web part kept retrying the failing Microsoft Graph call every minute indefinitely. It now backs off for 15 minutes after a failure before retrying.
+
+### Removed
+- **Unused PNG and vCard export code** — the underlying PNG image export and vCard download functions (already inaccessible from the UI since earlier releases) have been removed, along with the `html2canvas` dependency this dropped from the shipped bundle.
+
+---
+
 ## [1.2.1] — 2026-06-16
 
 ### Changed

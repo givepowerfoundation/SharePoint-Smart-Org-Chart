@@ -17,6 +17,7 @@ import {
 
 import { SmartOrgChart } from './components/SmartOrgChart';
 import { ISmartOrgChartProps, OrgChartTheme } from './components/ISmartOrgChartProps';
+import { DEMO_CEO_EMAIL } from '../../services/MockGraphService';
 
 export interface ISmartOrgChartWebPartProps {
   defaultView: 'directory' | 'orgchart';
@@ -78,6 +79,17 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
     if (p.hideNoJobTitle         === undefined) p.hideNoJobTitle         = false;
     if (p.hideNoDepartment       === undefined) p.hideNoDepartment       = false;
     return super.onInit();
+  }
+
+  // Give first-time editors a working example immediately: turning on Use
+  // Demo Data fills in the Top-Level User field with the demo CEO, unless
+  // the admin has already configured a real one.
+  protected onPropertyPaneFieldChanged(propertyPath: string, _oldValue: any, newValue: any): void {
+    if (propertyPath === 'useDemoData' && newValue === true && !this.properties.topLevelUser) {
+      this.properties.topLevelUser = DEMO_CEO_EMAIL;
+    }
+    this.context.propertyPane.refresh();
+    this.render();
   }
 
   public render(): void {

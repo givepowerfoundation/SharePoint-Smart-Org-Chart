@@ -1,5 +1,5 @@
 # Smart Org Chart — User Guide
-**Version 1.2.1**
+**Version 1.3.0**
 
 Smart Org Chart is a SharePoint web part that gives your organization two complementary views of its people data: a searchable **Employee Directory** and an interactive **Org Chart**, both powered by Microsoft Graph.
 
@@ -127,7 +127,7 @@ The vertical and horizontal tree layouts display the full loaded hierarchy simul
 
 **Panning:** Click and drag anywhere on the chart canvas to scroll.
 
-**Zooming:** Use the **+** / **−** buttons in the toolbar (bottom-right) or the reset button to return to 100%.
+**Zooming:** Use the **+** / **−** buttons in the toolbar (bottom-right) or the reset button to return to the default zoom level (100%, or whatever fixed zoom your admin has configured).
 
 ### Org Chart Toolbar
 
@@ -239,7 +239,7 @@ Click the **Excel** icon button in the org chart toolbar to download the current
 
 ## 8. Admin Configuration
 
-Open the SharePoint property pane (**Edit** → click the web part → pencil icon on the side) to configure the web part for your site. These settings apply to everyone viewing the page.
+Open the SharePoint property pane (**Edit** → click the web part → pencil icon on the side) to configure the web part for your site. These settings apply to everyone viewing the page, and most take effect immediately as you change them — no page reload required.
 
 ![SharePoint property pane showing all configuration groups](screenshots/14-property-pane.png)
 
@@ -291,6 +291,8 @@ These filters are applied globally — hidden users do not appear in the directo
 
 > The **Hide disabled accounts** and **Hide guest accounts** filters are **on by default** for new web part instances.
 
+> If a hidden account had direct reports, those reports are automatically re-linked to the next visible manager above them — hiding an account never orphans part of the org chart.
+
 ### Org Chart
 
 | Setting | Description |
@@ -321,7 +323,7 @@ These toggles show or hide individual toolbar buttons and features. Hide control
 
 | Setting | Description |
 |---|---|
-| **Use Demo Data** | When on, replaces live Microsoft 365 data with sample employees. Useful for testing or demonstrations without real user data. The dataset size (150 / 500 / 1,000 people) can be changed from the Settings panel. |
+| **Use Demo Data** | When on, replaces live Microsoft 365 data with sample employees. Useful for testing or demonstrations without real user data. The dataset size (150 / 500 / 1,000 people) can be changed from the Settings panel. If **Top-Level User** is empty, turning this on fills it in with the sample CEO automatically. |
 
 ---
 
