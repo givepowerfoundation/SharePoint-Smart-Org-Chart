@@ -2,6 +2,7 @@
 
 const path              = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 const ROOT      = path.resolve(__dirname, '..');
 const STUB_SCSS = path.resolve(__dirname, 'spfabric-stub.scss');
@@ -127,6 +128,18 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, 'index.html'),
       inject:   'body',
+    }),
+    // Fluent UI icon glyphs — without these, every <Icon> in the app (toolbar
+    // buttons, node card chevrons, etc.) renders as a blank square. SPFx
+    // pulls this font from SharePoint's CDN; the demo harness has no network
+    // access, so serve the same files locally instead.
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: path.join(ROOT, 'node_modules/@fluentui/font-icons-mdl2/fonts'),
+          to:   path.resolve(__dirname, 'dist/fonts'),
+        },
+      ],
     }),
   ],
 };

@@ -6,7 +6,7 @@ A SharePoint Framework web part that gives any SharePoint Online page a searchab
 
 ![SPFx](https://img.shields.io/badge/SPFx-1.18.2-0078D4?logo=microsoft&logoColor=white) ![React](https://img.shields.io/badge/React-17.0.1-61DAFB?logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-4.7.4-3178C6?logo=typescript&logoColor=white) ![Fluent UI](https://img.shields.io/badge/Fluent%20UI-8.x-0078D4?logo=microsoft&logoColor=white)
 
-![Smart Org Chart overview showing the Employee Directory card grid with search and alphabet filter](docs/screenshots/01-overview.png)
+![Smart Org Chart overview showing an interactive org chart tree spanning several levels of the organization](docs/screenshots/01-overview.png)
 
 ---
 

@@ -4,7 +4,7 @@ Place screenshot PNG files here. The user guide references the following files:
 
 | File | What to capture |
 |---|---|
-| `01-overview.png` | Full web part on the page, Employee Directory visible, default state |
+| `01-overview.png` | Hero shot — vertical org chart tree (copy of `08-orgchart-vertical.png`) |
 | `02-header-bar.png` | Close-up of the header bar (logo, title, action buttons) |
 | `03-directory-overview.png` | Employee Directory with alphabet bar, search box, and a full grid of cards |
 | `04-directory-alpha-filter.png` | Alphabet bar with one letter selected and the filtered results below |

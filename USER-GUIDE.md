@@ -27,7 +27,7 @@ Smart Org Chart is a SharePoint web part that gives your organization two comple
 
 Add the **Smart Org Chart** web part to any modern SharePoint page. On first use, an admin must open the property pane (pencil icon → edit web part) and set the **Top-Level User** field to the UPN or email of the person who should appear at the root of the org chart (typically the CEO or department head).
 
-![Overview of the Smart Org Chart web part showing the header bar and Employee Directory](screenshots/01-overview.png)
+![Overview of the Smart Org Chart web part showing the header bar and a vertical org chart tree](screenshots/01-overview.png)
 
 ---
 

@@ -13,6 +13,8 @@ const SHOTS_DIR    = path.resolve(__dirname, '../docs/screenshots');
 const DIST_DIR     = path.resolve(__dirname, 'dist');
 const webpackConfig = require('./webpack.demo.config.js');
 
+const VIEWPORT = { width: 1280, height: 950 };
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function build() {
@@ -58,6 +60,7 @@ async function screenshot(page, filename, clip) {
 }
 
 async function goAndWait(page, url, extraMs = 2500) {
+  await page.setViewport(VIEWPORT);
   await page.goto(`${BASE_URL}${url}`, { waitUntil: 'networkidle0' });
   // Wait for any loading spinner to disappear, then a bit more for animations
   await page.waitForFunction(
@@ -71,6 +74,19 @@ async function goAndWait(page, url, extraMs = 2500) {
 async function clickAndWait(page, selector, ms = 600) {
   await page.click(selector);
   await wait(ms);
+}
+
+// The tree canvas centers the whole hierarchy horizontally, so a CEO-rooted
+// tree that's wider than the viewport scrolls the root out of view unless we
+// explicitly re-center on it (drill mode and narrower subtrees don't need this).
+async function centerTree(page) {
+  await page.evaluate(() => {
+    const el = document.querySelector('[class*="treeScroll"]');
+    if (!el) return;
+    el.scrollTop = 0;
+    el.scrollLeft = Math.max(0, (el.scrollWidth - el.clientWidth) / 2);
+  });
+  await wait(300);
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -96,7 +112,7 @@ async function clickAndWait(page, selector, ms = 600) {
       '--no-first-run',
       '--no-zygote',
     ],
-    defaultViewport: { width: 1280, height: 900 },
+    defaultViewport: VIEWPORT,
   });
 
   const page = await browser.newPage();
@@ -105,12 +121,9 @@ async function clickAndWait(page, selector, ms = 600) {
   try {
     console.log('\nTaking screenshots…');
 
-    // ── 01 Overview (Directory) ──────────────────────────────────────────────
-    await goAndWait(page, '/?view=directory');
-    await screenshot(page, '01-overview.png');
-
     // ── 02 Header bar (clip top 60px) ────────────────────────────────────────
-    await screenshot(page, '02-header-bar.png', { x: 0, y: 0, width: 1280, height: 60 });
+    await goAndWait(page, '/?view=directory');
+    await screenshot(page, '02-header-bar.png', { x: 0, y: 0, width: VIEWPORT.width, height: 60 });
 
     // ── 03 Directory overview ────────────────────────────────────────────────
     await screenshot(page, '03-directory-overview.png');
@@ -143,19 +156,33 @@ async function clickAndWait(page, selector, ms = 600) {
     await goAndWait(page, '/?view=orgchart&layout=drill');
     await screenshot(page, '06-orgchart-drill.png');
 
-    // ── 07 Drill-down with breadcrumb ────────────────────────────────────────
-    // Click the first drill report card (expand button or card itself)
-    await page.evaluate(() => {
-      const btn = document.querySelector('[class*="expandBtn"]') ||
-                  document.querySelector('[class*="nodeCard"]');
-      if (btn) btn.click();
-    });
-    await wait(1000);
+    // ── 07 Drill-down 2 levels deep, with breadcrumb ─────────────────────────
+    // Click the first report's expand button twice: CEO -> VP -> Director,
+    // so the breadcrumb trail actually has something to show.
+    for (let i = 0; i < 2; i++) {
+      await page.evaluate(() => {
+        const btn = document.querySelector('[class*="expandBtn"]') ||
+                    document.querySelector('[class*="nodeCard"]');
+        if (btn) btn.click();
+      });
+      await wait(1000);
+    }
     await screenshot(page, '07-orgchart-drill-breadcrumb.png');
 
-    // ── 08 Org Chart vertical tree ───────────────────────────────────────────
-    await goAndWait(page, '/?view=orgchart&layout=vertical', 3000);
+    // ── 08 Org Chart vertical (Top Down) tree ────────────────────────────────
+    // Fixed zoom + centered scroll — auto-fit shrinks a CEO-rooted 150-person
+    // tree down to an unreadable 25%, and the canvas centers on the full
+    // hierarchy width, not the viewport, so the root scrolls out of view.
+    await goAndWait(page, '/?view=orgchart&layout=vertical&levels=3&zoom=0.65', 3000);
+    await centerTree(page);
     await screenshot(page, '08-orgchart-vertical.png');
+    // Also the main "overview" hero shot — the tree reads better than the
+    // plain directory grid (03-directory-overview.png already covers that).
+    fs.copyFileSync(
+      path.join(SHOTS_DIR, '08-orgchart-vertical.png'),
+      path.join(SHOTS_DIR, '01-overview.png')
+    );
+    console.log('  ✓ 01-overview.png (copy of 08-orgchart-vertical.png)');
 
     // ── 09 Toolbar close-up ──────────────────────────────────────────────────
     const toolbarBox = await page.evaluate(() => {
@@ -178,7 +205,13 @@ async function clickAndWait(page, selector, ms = 600) {
     await screenshot(page, '10-orgchart-stats.png');
 
     // ── 11 Department filter open ────────────────────────────────────────────
-    // Close stats first by clicking it again, then open dept filter
+    // Close stats first so the two panels don't stack in the same shot
+    await page.evaluate(() => {
+      const btns = Array.from(document.querySelectorAll('button'));
+      const stats = btns.find(b => b.title && b.title.toLowerCase().includes('stat'));
+      if (stats) stats.click();
+    });
+    await wait(300);
     await page.evaluate(() => {
       const btns = Array.from(document.querySelectorAll('button'));
       const dept = btns.find(b => b.title && (b.title.toLowerCase().includes('department') || b.title.toLowerCase().includes('dept')));
@@ -192,12 +225,25 @@ async function clickAndWait(page, selector, ms = 600) {
     await page.keyboard.press('Escape');
     await wait(200);
     await goAndWait(page, '/?view=orgchart&layout=drill');
-    // Click the current-person profile button or a report card
+    // Drill CEO -> VP -> Director so the profile we open has a multi-level
+    // "Reports to" chain to show off, then click one of the Director's own
+    // reports (a manager) to open their card.
+    for (let i = 0; i < 2; i++) {
+      await page.evaluate(() => {
+        const btn = document.querySelector('[class*="expandBtn"]') ||
+                    document.querySelector('[class*="nodeCard"]');
+        if (btn) btn.click();
+      });
+      await wait(1000);
+    }
     await page.evaluate(() => {
+      const cards = Array.from(document.querySelectorAll('[class*="nodeCard"]'));
+      // Cards double as the "drill into" control — click one's avatar/name
+      // area isn't separable from drill-in, so instead open the profile via
+      // the currently-drilled header, which shows richer chain 2 levels in.
       const profileBtn = document.querySelector('[class*="drillCurrentProfileBtn"]');
       if (profileBtn) { profileBtn.click(); return; }
-      const card = document.querySelector('[class*="nodeCard"]');
-      if (card) card.click();
+      if (cards[0]) cards[0].click();
     });
     await wait(800);
     await screenshot(page, '12-person-card.png');
@@ -233,14 +279,6 @@ async function clickAndWait(page, selector, ms = 600) {
     );
     console.log('  ✓ 15-themes.png (also saved 15-theme-modern/minimal/corporate/dark.png)');
 
-    // ── 16 Org Chart vertical (left-right columns) tree ──────────────────────
-    await goAndWait(page, '/?view=orgchart&layout=horizontal', 3000);
-    await screenshot(page, '16-orgchart-vertical.png');
-
-    // ── 18 Org Chart horizontal (top-down wide spread) tree ───────────────────
-    await goAndWait(page, '/?view=orgchart&layout=vertical', 3000);
-    await screenshot(page, '18-orgchart-horizontal.png');
-
     // ── 17 Directory list view ────────────────────────────────────────────────
     await goAndWait(page, '/?view=directory');
     await page.evaluate(() => {
@@ -250,6 +288,11 @@ async function clickAndWait(page, selector, ms = 600) {
     });
     await wait(600);
     await screenshot(page, '17-directory-list.png');
+
+    // ── 18 Org Chart horizontal (Left to Right) tree ─────────────────────────
+    await goAndWait(page, '/?view=orgchart&layout=horizontal&levels=3&zoom=0.75', 3000);
+    await centerTree(page); // no-op for this layout (already left-anchored) but harmless
+    await screenshot(page, '18-orgchart-horizontal.png');
 
     console.log(`\nAll screenshots saved to ${SHOTS_DIR}`);
 

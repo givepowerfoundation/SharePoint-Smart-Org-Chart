@@ -1,8 +1,15 @@
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
+import { initializeIcons } from '@fluentui/react/lib/Icons';
 import { SmartOrgChart } from '../src/webparts/smartOrgChart/components/SmartOrgChart';
 import { MockCompanySize } from '../src/services/MockGraphService';
 import { OrgChartTheme } from '../src/webparts/smartOrgChart/components/ISmartOrgChartProps';
+
+// SharePoint normally registers the Fabric icon font glyphs for us; the demo
+// harness runs standalone, so without this every <Icon> renders as a blank
+// square. Font files are served locally (see webpack.demo.config.js) since
+// this harness has no network access.
+initializeIcons('fonts/');
 
 const p = new URLSearchParams(window.location.search);
 
@@ -11,6 +18,8 @@ const layout   = (p.get('layout') || 'drill')     as 'drill' | 'vertical' | 'hor
 const theme    = (p.get('theme')  || 'modern')    as OrgChartTheme;
 const sizeRaw  = p.get('mockSize');
 const mockSize: MockCompanySize = sizeRaw === '500' ? 500 : sizeRaw === '1000' ? 1000 : 150;
+const levelsBelow = p.has('levels') ? parseInt(p.get('levels') as string, 10) : 3;
+const defaultZoom = p.has('zoom') ? parseFloat(p.get('zoom') as string) : 0;
 
 // Persist the requested mock size so SmartOrgChart's readMockSize() picks it up.
 try { localStorage.setItem('smartOrgChart_mockSize', String(mockSize)); } catch { /* ignore */ }
@@ -39,7 +48,7 @@ ReactDOM.render(
     context={mockContext}
     defaultView={view}
     topLevelUser="a.chen@contoso.com"
-    levelsBelow={3}
+    levelsBelow={levelsBelow}
     pageSize={50}
     useDemoData={true}
     hideDemoBanner={true}
@@ -52,6 +61,7 @@ ReactDOM.render(
     enableStats={true}
     enableDeptFilter={true}
     enableUserFilter={true}
+    defaultZoom={defaultZoom}
     onSettingsSaved={() => { /* no-op in demo */ }}
   />,
   document.getElementById('root'),
