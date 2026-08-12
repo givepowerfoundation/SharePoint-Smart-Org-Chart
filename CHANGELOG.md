@@ -4,6 +4,32 @@ All notable changes to Smart Org Chart are documented here.
 
 ---
 
+## [1.4.0] — 2026-08-12
+
+### Added
+- **Filter by country** — a new toolbar filter in the org chart and a new dropdown in the Employee Directory, both driven by the Azure AD `country` attribute. Works like the existing department filter: pick one or more countries, and ancestors of matching people stay visible so the hierarchy isn't broken.
+- **Color-coded country pill** — org chart cards, person profile cards, and directory cards now show the person's country as a colored pill. Colors are configured in the property pane under **Branding → Country pill colors**, one `Country=#hex` mapping per line. Countries with no mapping get a stable color derived from the name, so the pills are readable without any configuration.
+- **Employee type pill** — the Azure AD `employeeType` value (e.g. Employee, Contractor, PTE) now appears as a pill alongside the country pill in all three card types.
+- **Country and Employee Type columns** in the org chart CSV export and the Employee Directory export.
+- **Full-width column support** — the web part can now be placed in a full-width section on a SharePoint page, giving the org chart the full browser width. Previously SharePoint excluded it from full-width sections entirely.
+
+### Changed
+- **The user type filter is now an employee type filter.** The org chart's funnel button previously toggled Azure AD account types (Regular members / Guest users), which describes tenant plumbing rather than workforce composition. It now filters on `employeeType` instead, listing the values actually present in your directory. The property pane toggle keeps its old key, so an instance that had this filter hidden stays hidden after upgrade — but anyone who had member/guest checkboxes set will find that selection cleared, since the underlying filter no longer exists. Guest and Disabled **badges** on cards are unchanged, as are the admin-level **Hide Azure AD guest accounts** and **Hide disabled accounts** filters.
+- **Org chart cards are 22px taller** (230px → 252px) to fit the new pill row. Compact card mode is unchanged and does not show the new pills — it is height-locked with no room for another row.
+- All three org chart facet filters (department, country, employee type) now share one implementation, so they behave identically: an empty selection means no filtering, and opening one popup closes the others.
+
+### Upgraded
+- **SharePoint Framework 1.18.2 → 1.21.1**, which brings the supported build environment up to **Node.js 22 LTS** (1.18 was capped at Node 18) and TypeScript 4.7 → 5.3.3. React stays pinned at 17.0.1 and Fluent UI at 8.x, so no component code changed. 1.21.1 is deliberately the target rather than 1.22+: it is the last release on the gulp build toolchain, so `gulpfile.js` and the existing `npm run build` / `npm run ship` scripts are unchanged. SPFx 1.22 replaced gulp with Heft, which would be a separate migration.
+  - `package.json` now declares `engines.node: ">=22.14.0 < 23.0.0"`, so an unsupported Node version fails fast at install time instead of part-way through a build. Note this is deliberately stricter than the toolchain's own floor — SPFx 1.21.1 will actually run on `>=18.17.1 <19 || >=20.11.0 <21 || >=22.14.0 <23` — because v22 is the version Microsoft documents as supported for 1.21. Widen the range if you need to build on 18 or 20.
+  - `tsconfig.json` extends `@microsoft/rush-stack-compiler-5.3` (was `-4.7`).
+  - CI (`.github/workflows/release.yml`) now builds on Node 22.
+  - Node 23 and 24 are not supported by any SPFx release, including the newest.
+
+### Notes
+- `country` and `employeeType` are only returned by the **Graph API** data source. The SharePoint Search people source exposes no equivalent managed properties, so both filters hide themselves and both pills stay empty when data comes from Search. No new Graph permission is required — the existing `User.Read.All` scope covers both fields.
+
+---
+
 ## [1.3.0] — 2026-07-14
 
 ### Added

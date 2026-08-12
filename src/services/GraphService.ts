@@ -9,9 +9,11 @@ export interface IGraphUser {
   businessPhones: string[];
   department: string;
   officeLocation: string;
+  country: string;           // AAD profile country — free text, empty on the Search data source
   userPrincipalName: string;
   accountEnabled?: boolean;  // false = disabled / blocked sign-in
   userType?: string;         // 'Member' | 'Guest' | undefined
+  employeeType?: string;     // 'Employee' | 'Contractor' | 'PTE' | undefined (tenant-defined)
   dottedManagerId?: string;  // secondary "dotted line" manager (resolved user id)
 }
 
@@ -355,15 +357,15 @@ export class GraphService {
         const response = await (this._graphClient as MSGraphClientV3)
           .api(`/users/${encodeURIComponent(managerId)}/directReports`)
           .version('v1.0')
-          .select('id,displayName,mail,jobTitle,department,officeLocation,mobilePhone,businessPhones,userPrincipalName,accountEnabled,userType')
+          .select('id,displayName,mail,jobTitle,department,officeLocation,country,mobilePhone,businessPhones,userPrincipalName,accountEnabled,userType,employeeType')
           .top(999)
           .get();
 
         const reports: Array<{
           id: string; displayName: string; mail: string; jobTitle: string;
-          department: string; officeLocation: string; mobilePhone: string;
+          department: string; officeLocation: string; country: string; mobilePhone: string;
           businessPhones: string[]; userPrincipalName: string;
-          accountEnabled?: boolean; userType?: string;
+          accountEnabled?: boolean; userType?: string; employeeType?: string;
         }> = response?.value || [];
 
         // The loop below runs synchronously after the await, so concurrent
@@ -389,9 +391,11 @@ export class GraphService {
             businessPhones:    rep.businessPhones  || [],
             department:        rep.department      || '',
             officeLocation:    rep.officeLocation  || '',
+            country:           rep.country         || '',
             userPrincipalName: upn,
             accountEnabled:    rep.accountEnabled,
             userType:          rep.userType,
+            employeeType:      rep.employeeType,
           });
         }
       } catch {
@@ -414,7 +418,7 @@ export class GraphService {
     if (!this._graphClient) throw new Error('Graph client not available');
 
     const users: IGraphUser[] = [];
-    let SELECT = 'id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,mobilePhone,businessPhones,accountEnabled,userType';
+    let SELECT = 'id,displayName,mail,userPrincipalName,jobTitle,department,officeLocation,country,mobilePhone,businessPhones,accountEnabled,userType,employeeType';
     if (this._dottedLineAttribute) SELECT += ',onPremisesExtensionAttributes';
     let url: string | null =
       `/users?$select=${SELECT}&$expand=manager($select=id,userPrincipalName,mail)&$top=999`;
@@ -431,10 +435,12 @@ export class GraphService {
         jobTitle: string;
         department: string;
         officeLocation: string;
+        country: string;
         mobilePhone: string;
         businessPhones: string[];
         accountEnabled?: boolean;
         userType?: string;
+        employeeType?: string;
         manager?: { id: string; userPrincipalName: string; mail: string };
         onPremisesExtensionAttributes?: { [key: string]: string | null };
       }> = response?.value || [];
@@ -476,9 +482,11 @@ export class GraphService {
           businessPhones:    item.businessPhones     || [],
           department:        item.department         || '',
           officeLocation:    item.officeLocation     || '',
+          country:           item.country            || '',
           userPrincipalName: upn,
           accountEnabled:    item.accountEnabled,
           userType:          item.userType,
+          employeeType:      item.employeeType,
         });
       }
 
@@ -648,6 +656,10 @@ export class GraphService {
       businessPhones:    p['WorkPhone'] ? [p['WorkPhone']] : [],
       department:        p['Department'] || '',
       officeLocation:    p['OfficeNumber'] || '',
+      // The people search source exposes no Country managed property, and no
+      // EmployeeType at all — both stay empty on this data source. Same limitation
+      // as userType / accountEnabled above.
+      country:           '',
       userPrincipalName: upn,
     };
     if (managerId) this._pendingManagerIds.set(id, managerId);

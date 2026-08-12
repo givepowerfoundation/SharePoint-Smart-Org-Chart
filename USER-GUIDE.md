@@ -144,7 +144,8 @@ The toolbar appears above the chart and contains the following controls (some ma
 | **View** | Opens the layout picker to switch between Drill-Down, Top Down, and Left to Right. |
 | **Stats bar** (chart icon) | Toggles a summary bar showing total people, members, guests, and departments. |
 | **Department filter** (tools icon) | Shows checkboxes to show only selected departments. A badge on the button shows how many filters are active. |
-| **User type filter** (funnel icon) | Toggles visibility of Regular members and Guest users. |
+| **Country filter** (globe icon) | Shows checkboxes to show only selected countries, each with its color swatch. Hidden if no one in the chart has a country set. |
+| **Employee type filter** (funnel icon) | Shows checkboxes to show only selected employee types (for example Employee, Contractor, PTE). People with no employee type set are grouped under **Not set**. Hidden if no one in the chart has an employee type set. |
 | **Export PDF** (PDF icon) | Downloads the currently visible org chart as a PDF. |
 | **Export CSV** (Excel icon) | Downloads the currently visible org chart as a CSV spreadsheet. |
 | **Zoom controls** | Visible in tree modes only. Adjust the scale from 25% to 150%. |
@@ -156,6 +157,17 @@ The toolbar appears above the chart and contains the following controls (some ma
 #### Department filter
 
 ![Department filter dropdown showing checkboxes for Engineering, HR, Finance, Sales](screenshots/11-orgchart-deptfilter.png)
+
+#### Country and employee type filters
+
+The country and employee type filters work exactly like the department filter: check one
+or more values to narrow the chart, and ancestors of matching people stay visible so you
+can still see the reporting chain above them. All three can be combined — for example
+Engineering **and** Kenya **and** Contractor. With nothing checked, everyone is shown.
+
+Both read attributes from Azure AD (`country` and `employeeType`) and are only available
+when the web part is configured to use the Graph API data source. If your organization
+doesn't fill these fields in, the buttons don't appear at all.
 
 ---
 
@@ -255,6 +267,15 @@ Open the SharePoint property pane (**Edit** → click the web part → pencil ic
 |---|---|
 | **App Title** | Text shown in the header bar alongside the current view name (e.g. "Contoso"). |
 | **Logo URL** | Full URL to a PNG, SVG, or JPG logo file. Open the image in your browser and copy the address bar URL. SharePoint "Copy link" sharing URLs will not work. |
+| **Country pill colors** | Optional. Sets a specific color per country for the country pill on employee cards, one `Country=#hex` mapping per line (for example `Kenya=#0b7d5a`). Country names must match the value in Azure AD. Any country you don't list gets an automatic color, so this is only needed where you want a particular color. |
+
+### Page placement
+
+The web part can be added to an ordinary page section or to a **full-width column** section.
+Full width gives the org chart the entire browser width, which helps with large
+organizations. Add a full-width column section to the page first, then add Smart Org Chart
+to it. Not every page template offers a full-width column — it is generally available on
+Communication site pages.
 
 ### Visual Style
 
@@ -311,7 +332,8 @@ These toggles show or hide individual toolbar buttons and features. Hide control
 | Layout toggle | On |
 | Org stats bar | On |
 | Department filter | On |
-| User type filter | On |
+| Country filter | On |
+| Employee type filter | On |
 
 ### Directory
 

@@ -16,7 +16,11 @@ export interface IOrgChartProps {
   enableLayoutToggle: boolean;
   enableStats: boolean;
   enableDeptFilter: boolean;
+  enableCountryFilter: boolean;
+  /** Employee-type filter (property key is enableUserFilter for upgrade compatibility) */
   enableUserFilter: boolean;
+  /** Country name (lower-cased) → hex colour, parsed from the countryColors property */
+  countryColors: Map<string, string>;
   defaultZoom: number;
   /** Web part instance ID — scopes localStorage state so instances on different pages don't clash */
   instanceId: string;

@@ -8,6 +8,7 @@ import { IGraphUser, IOrgNode, PresenceAvailability } from '../../../../services
 import { exportOrgChartToPdf, exportOrgChartToCsv } from '../../../../services/PdfExportService';
 import { IOrgChartProps, IOrgChartState } from './IOrgChartProps';
 import { PRESENCE_COLOR, PRESENCE_LABEL, getInitials } from '../personUtils';
+import { EMPLOYEE_TYPE_UNSET, getCountryColor } from '../countryUtils';
 import styles from './OrgChart.module.scss';
 
 /* ── Tree mutation helpers ───────────────── */
@@ -105,30 +106,25 @@ function matchUserQuery(user: IGraphUser, lowerQ: string): boolean {
   );
 }
 
-function countTreeUsers(node: IOrgNode): { members: number; guests: number; disabled: number } {
-  const c = { members: 0, guests: 0, disabled: 0 };
-  const visit = (n: IOrgNode) => {
-    const u = n.user;
-    if (u.accountEnabled === false) c.disabled++;
-    else if (u.userType === 'Guest') c.guests++;
-    else c.members++;
-    n.directReports.forEach(visit);
-  };
-  visit(node);
-  return c;
-}
-
-
-function getUniqueDepts(node: IOrgNode): Map<string, number> {
+// Distinct values of one user field across the tree, with a count per value.
+// Drives the department, country and employee-type filter lists. A selector returning
+// '' skips the user, so callers decide whether "no value" is a bucket of its own.
+function getUniqueValues(node: IOrgNode, selector: (u: IGraphUser) => string): Map<string, number> {
   const map = new Map<string, number>();
   const visit = (n: IOrgNode) => {
-    const dept = n.user.department || '';
-    if (dept) map.set(dept, (map.get(dept) || 0) + 1);
+    const value = selector(n.user);
+    if (value) map.set(value, (map.get(value) || 0) + 1);
     n.directReports.forEach(visit);
   };
   visit(node);
   return map;
 }
+
+const selectDepartment  = (u: IGraphUser): string => u.department || '';
+const selectCountry     = (u: IGraphUser): string => u.country || '';
+// Unlike the other two, every user lands in a bucket — users with no employeeType are
+// grouped under 'Not set' so they remain reachable from the filter.
+const selectEmployeeType = (u: IGraphUser): string => u.employeeType || EMPLOYEE_TYPE_UNSET;
 
 function computeStats(users: IGraphUser[]): {
   total: number; members: number; guests: number; depts: number;
@@ -183,12 +179,13 @@ interface IPersonCardProps {
   managerChain: IGraphUser[];
   dottedManager: IGraphUser | null;
   dottedReports: IGraphUser[];
+  countryColors: Map<string, string>;
   onClose: () => void;
   onFocus: (user: IGraphUser) => void;
 }
 
 const PersonCard: React.FC<IPersonCardProps> = ({
-  user, photo, presence, theme, managerChain, dottedManager, dottedReports, onClose, onFocus
+  user, photo, presence, theme, managerChain, dottedManager, dottedReports, countryColors, onClose, onFocus
 }) => {
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') onClose(); };
@@ -265,6 +262,19 @@ const PersonCard: React.FC<IPersonCardProps> = ({
             {user.department && (
               <span className={styles.personCardDeptBadge} style={{ background: `${deptColor}1a`, color: deptColor }}>
                 {user.department}
+              </span>
+            )}
+            {user.country && (() => {
+              const countryColor = getCountryColor(user.country, countryColors);
+              return (
+                <span className={styles.personCardDeptBadge} style={{ background: `${countryColor}1a`, color: countryColor }}>
+                  {user.country}
+                </span>
+              );
+            })()}
+            {user.employeeType && (
+              <span className={styles.personCardStatusBadge} style={{ background: '#f0f3f7', color: '#5a6472' }}>
+                {user.employeeType}
               </span>
             )}
             {isDisabled && <span className={styles.personCardStatusBadge} style={{ background: '#fde7e9', color: '#c50f1f' }}>Disabled</span>}
@@ -409,33 +419,44 @@ const PersonCard: React.FC<IPersonCardProps> = ({
 
 /* ── Filter dropdown ─────────────────────── */
 
-interface IFilterCounts { members: number; guests: number; disabled: number; }
-
-interface IFilterPanelProps {
-  filterMembers: boolean;
-  filterGuests: boolean;
-  counts: IFilterCounts;
-  onToggle: (key: 'members' | 'guests') => void;
+interface IValueFilterPanelProps {
+  title: string;
+  /** Value → number of users with that value, as returned by getUniqueValues */
+  values: Map<string, number>;
+  /** Currently checked values. Empty means "no filter" — everyone is shown. */
+  selected: Set<string>;
+  onToggle: (value: string) => void;
+  onClear: () => void;
+  /** Optional colour swatch shown before the label (used by the country filter) */
+  swatchColor?: (value: string) => string;
+  minWidth?: number;
 }
 
-const FilterPanel: React.FC<IFilterPanelProps> = ({ filterMembers, filterGuests, counts, onToggle }) => {
-  const items: Array<{ key: 'members' | 'guests'; label: string; count: number; checked: boolean }> = [
-    { key: 'members',  label: 'Regular members',   count: counts.members,  checked: filterMembers  },
-    { key: 'guests',   label: 'Guest users',        count: counts.guests,   checked: filterGuests   },
-  ];
-  return (
-    <div className={styles.filterPanel}>
-      <div className={styles.filterPanelTitle}>Show in chart</div>
-      {items.map(({ key, label, count, checked }) => (
-        <label key={key} className={styles.filterItem}>
-          <input type="checkbox" checked={checked} onChange={() => onToggle(key)} className={styles.filterCheckbox} />
-          <span className={styles.filterLabel}>{label}</span>
-          <span className={styles.filterCount}>{count}</span>
-        </label>
-      ))}
-    </div>
-  );
-};
+// Shared by the department, country and employee-type filters. All three are inclusion
+// filters over a discovered set of values: nothing checked shows everyone.
+const ValueFilterPanel: React.FC<IValueFilterPanelProps> = ({
+  title, values, selected, onToggle, onClear, swatchColor, minWidth
+}) => (
+  <div className={styles.filterPanel} style={minWidth ? { minWidth } : undefined}>
+    <div className={styles.filterPanelTitle}>{title}</div>
+    {Array.from(values.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([value, count]) => (
+      <label key={value} className={styles.filterItem}>
+        <input
+          type="checkbox"
+          className={styles.filterCheckbox}
+          checked={selected.has(value)}
+          onChange={() => onToggle(value)}
+        />
+        {swatchColor && <span className={styles.filterSwatch} style={{ background: swatchColor(value) }} />}
+        <span className={styles.filterLabel}>{value}</span>
+        <span className={styles.filterCount}>{count}</span>
+      </label>
+    ))}
+    {selected.size > 0 && (
+      <button className={styles.filterClearBtn} onClick={onClear}>Clear all filters</button>
+    )}
+  </div>
+);
 
 /* ── Node card ───────────────────────────── */
 
@@ -451,6 +472,7 @@ interface IOrgNodeCardProps {
   directReportCount: number;
   managerUser?: IGraphUser;
   compactCards: boolean;
+  countryColors: Map<string, string>;
   onToggle: (node: IOrgNode) => void;
   onCardClick: (user: IGraphUser) => void;
   onFocus: (user: IGraphUser) => void;
@@ -459,7 +481,7 @@ interface IOrgNodeCardProps {
 const OrgNodeCard: React.FC<IOrgNodeCardProps> = ({
   node, photos, presenceMap, showDepartment, showOffice, isExpanding,
   searchQuery, theme, directReportCount, managerUser,
-  compactCards, onToggle, onCardClick, onFocus
+  compactCards, countryColors, onToggle, onCardClick, onFocus
 }) => {
   const { user } = node;
   const photo     = photos[user.id];
@@ -530,6 +552,27 @@ const OrgNodeCard: React.FC<IOrgNodeCardProps> = ({
           ↑ {managerUser.displayName.split(' ')[0]}
         </div>
       )}
+      {(user.country || user.employeeType) && !isGuest && !isDisabled && (
+        <div className={styles.nodePillRow}>
+          {user.country && (() => {
+            const color = getCountryColor(user.country, countryColors);
+            return (
+              <span
+                className={styles.nodePill}
+                style={{ background: `${color}1a`, color }}
+                title={user.country}
+              >
+                {user.country}
+              </span>
+            );
+          })()}
+          {user.employeeType && (
+            <span className={`${styles.nodePill} ${styles.nodePillNeutral}`} title={user.employeeType}>
+              {user.employeeType}
+            </span>
+          )}
+        </div>
+      )}
       {(isGuest || isDisabled) && (
         <div
           className={styles.nodeDept}
@@ -574,6 +617,7 @@ interface IOrgTreeProps {
   isVisible: (user: IGraphUser) => boolean;
   parentUser?: IGraphUser;
   compactCards: boolean;
+  countryColors: Map<string, string>;
   onToggle: (node: IOrgNode) => void;
   onCardClick: (user: IGraphUser) => void;
   onFocus: (user: IGraphUser) => void;
@@ -581,7 +625,7 @@ interface IOrgTreeProps {
 
 const OrgTree: React.FC<IOrgTreeProps> = ({
   node, photos, presenceMap, showDepartment, showOffice,
-  expandingNodes, searchQuery, theme, isVisible, parentUser, compactCards,
+  expandingNodes, searchQuery, theme, isVisible, parentUser, compactCards, countryColors,
   onToggle, onCardClick, onFocus
 }) => {
   if (!subtreeHasVisible(node, isVisible)) return null;
@@ -603,6 +647,7 @@ const OrgTree: React.FC<IOrgTreeProps> = ({
         directReportCount={visibleReports.length}
         managerUser={parentUser}
         compactCards={compactCards}
+        countryColors={countryColors}
         onToggle={onToggle}
         onCardClick={onCardClick}
         onFocus={onFocus}
@@ -623,6 +668,7 @@ const OrgTree: React.FC<IOrgTreeProps> = ({
               isVisible={isVisible}
               parentUser={node.user}
               compactCards={compactCards}
+              countryColors={countryColors}
               onToggle={onToggle}
               onCardClick={onCardClick}
               onFocus={onFocus}
@@ -663,8 +709,7 @@ interface IOrgChartLocalState extends IOrgChartState {
   selectedUser: IGraphUser | null;
   showFilters: boolean;
   isDragging: boolean;
-  filterMembers: boolean;
-  filterGuests: boolean;
+  filterEmployeeTypes: Set<string>;
   // Focus / navigation (full-tree mode)
   focusedUser: IGraphUser | null;
   ancestorChain: IGraphUser[];
@@ -680,6 +725,8 @@ interface IOrgChartLocalState extends IOrgChartState {
   // Tier 3
   filterDepartments: Set<string>;
   showDeptFilter: boolean;
+  filterCountries: Set<string>;
+  showCountryFilter: boolean;
   showStats: boolean;
   // Drill-down mode
   drillPath: IGraphUser[];
@@ -699,10 +746,13 @@ const LS_CHART_KEY = 'smartOrgChart_chartState';
 interface IChartStoredState {
   chartLayout?: ChartLayout;
   showStats?: boolean;
-  filterMembers?: boolean;
-  filterGuests?: boolean;
   filterDepartments?: string[];
+  filterCountries?: string[];
+  filterEmployeeTypes?: string[];
   focusEmail?: string | null;
+  // filterMembers / filterGuests were written by v1.3 and earlier. They are ignored on
+  // read — the member/guest filter they belonged to is now an employee-type filter — and
+  // are dropped on the next save.
 }
 
 // Storage is scoped per web part instance — all SharePoint sites share one
@@ -779,8 +829,9 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
   // Per-render tree scans are cached by reference — the tree is immutable,
   // so a changed rootNode/allUsers reference is the only invalidation signal
   private _treeScanFor: IOrgNode | null = null;
-  private _treeCounts: IFilterCounts = { members: 0, guests: 0, disabled: 0 };
   private _uniqueDepts: Map<string, number> = new Map();
+  private _uniqueCountries: Map<string, number> = new Map();
+  private _uniqueEmployeeTypes: Map<string, number> = new Map();
   private _statsFor: IGraphUser[] | null = null;
   private _stats: { total: number; members: number; guests: number; depts: number } | null = null;
 
@@ -797,8 +848,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       presenceMap: new Map(), zoomLevel: props.defaultZoom > 0 ? props.defaultZoom : 1,
       selectedUser: null,
       showFilters: false,
-      filterMembers: props.enableUserFilter ? (stored.filterMembers ?? true) : true,
-      filterGuests: props.enableUserFilter ? (stored.filterGuests ?? true) : true,
+      filterEmployeeTypes: props.enableUserFilter ? new Set(stored.filterEmployeeTypes ?? []) : new Set(),
       isDragging: false,
       focusedUser: null, ancestorChain: [], allUsers: [],
       showSearchResults: false, personCardManagerChain: [],
@@ -809,6 +859,8 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       findMeError: '',
       filterDepartments: props.enableDeptFilter ? new Set(stored.filterDepartments ?? []) : new Set(),
       showDeptFilter: false,
+      filterCountries: props.enableCountryFilter ? new Set(stored.filterCountries ?? []) : new Set(),
+      showCountryFilter: false,
       showStats: props.enableStats ? (stored.showStats ?? false) : false,
       drillPath: [], drillReports: [], drillLoadingId: null,
       drillReportCounts: new Map(),
@@ -861,36 +913,39 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       this._setLayout(this.props.defaultLayout || 'drill');
     }
     if (prev.enableUserFilter && !this.props.enableUserFilter) {
-      this.setState({ filterMembers: true, filterGuests: true });
+      this.setState({ filterEmployeeTypes: new Set() });
     }
     if (prev.enableDeptFilter && !this.props.enableDeptFilter) {
       this.setState({ filterDepartments: new Set() });
+    }
+    if (prev.enableCountryFilter && !this.props.enableCountryFilter) {
+      this.setState({ filterCountries: new Set() });
     }
     if (prev.enableStats && !this.props.enableStats) {
       this.setState({ showStats: false });
     }
 
     if (
-      prevState.rootNode          !== this.state.rootNode          ||
-      prevState.filterDepartments !== this.state.filterDepartments ||
-      prevState.filterMembers     !== this.state.filterMembers     ||
-      prevState.filterGuests      !== this.state.filterGuests      ||
-      prevState.zoomLevel         !== this.state.zoomLevel         ||
-      prevState.chartLayout       !== this.state.chartLayout
+      prevState.rootNode            !== this.state.rootNode            ||
+      prevState.filterDepartments   !== this.state.filterDepartments   ||
+      prevState.filterCountries     !== this.state.filterCountries     ||
+      prevState.filterEmployeeTypes !== this.state.filterEmployeeTypes ||
+      prevState.zoomLevel           !== this.state.zoomLevel           ||
+      prevState.chartLayout         !== this.state.chartLayout
     ) {
       this._fixConnectorLines();
     }
 
-    const { isLoading, chartLayout, showStats, filterMembers, filterGuests,
-            filterDepartments, drillPath, focusedUser } = this.state;
+    const { isLoading, chartLayout, showStats, filterEmployeeTypes,
+            filterDepartments, filterCountries, drillPath, focusedUser } = this.state;
     if (!isLoading && (
-      prevState.chartLayout       !== chartLayout       ||
-      prevState.showStats         !== showStats         ||
-      prevState.filterMembers     !== filterMembers     ||
-      prevState.filterGuests      !== filterGuests      ||
-      prevState.filterDepartments !== filterDepartments ||
-      prevState.drillPath         !== drillPath         ||
-      prevState.focusedUser       !== focusedUser
+      prevState.chartLayout         !== chartLayout         ||
+      prevState.showStats           !== showStats           ||
+      prevState.filterEmployeeTypes !== filterEmployeeTypes ||
+      prevState.filterDepartments   !== filterDepartments   ||
+      prevState.filterCountries     !== filterCountries     ||
+      prevState.drillPath           !== drillPath           ||
+      prevState.focusedUser         !== focusedUser
     )) {
       // Only persist a focus once the user actually navigated away from the
       // default position — otherwise every page view stamps ?socFocus into
@@ -906,8 +961,10 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
           ? (drillPath[drillPath.length - 1].mail ?? null)
           : (focusedUser?.mail ?? null);
       saveChartState(this.props.instanceId, {
-        chartLayout, showStats, filterMembers, filterGuests,
-        filterDepartments: Array.from(filterDepartments),
+        chartLayout, showStats,
+        filterDepartments:   Array.from(filterDepartments),
+        filterCountries:     Array.from(filterCountries),
+        filterEmployeeTypes: Array.from(filterEmployeeTypes),
         focusEmail,
       });
       updateUrlFocus(focusEmail);
@@ -926,9 +983,9 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
 
   private _handleEscKey = (e: KeyboardEvent): void => {
     if (e.key !== 'Escape') return;
-    const { showFilters, showDeptFilter, showLayoutPicker } = this.state;
-    if (showFilters || showDeptFilter || showLayoutPicker) {
-      this.setState({ showFilters: false, showDeptFilter: false, showLayoutPicker: false });
+    const { showFilters, showDeptFilter, showCountryFilter, showLayoutPicker } = this.state;
+    if (showFilters || showDeptFilter || showCountryFilter || showLayoutPicker) {
+      this.setState({ showFilters: false, showDeptFilter: false, showCountryFilter: false, showLayoutPicker: false });
     }
   }
 
@@ -1556,12 +1613,15 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
 
   /* ── Filter ── */
 
+  // The single visibility chokepoint — node rendering, export, search counts and the
+  // drill report list all go through this. Each filter is an inclusion set: empty means
+  // no constraint, so an untouched chart shows everyone.
   private _buildIsVisible = (): (user: IGraphUser) => boolean => {
-    const { filterMembers, filterGuests, filterDepartments } = this.state;
+    const { filterDepartments, filterCountries, filterEmployeeTypes } = this.state;
     return (user: IGraphUser) => {
-      if (user.userType === 'Guest'     && !filterGuests)   return false;
-      if (user.accountEnabled !== false && user.userType !== 'Guest' && !filterMembers) return false;
-      if (filterDepartments.size > 0 && !filterDepartments.has(user.department || '')) return false;
+      if (filterDepartments.size > 0 && !filterDepartments.has(selectDepartment(user))) return false;
+      if (filterCountries.size > 0 && !filterCountries.has(selectCountry(user))) return false;
+      if (filterEmployeeTypes.size > 0 && !filterEmployeeTypes.has(selectEmployeeType(user))) return false;
       return true;
     };
   }
@@ -1722,6 +1782,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
                       theme={theme}
                       directReportCount={count ?? 0}
                       compactCards={compactCards}
+                      countryColors={this.props.countryColors}
                       onToggle={node => this._handleDrillInto(node.user)}
                       onCardClick={this._handleDrillInto}
                       onFocus={this._handleCardClick}
@@ -1779,14 +1840,16 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     const {
       rootNode, isLoading, error, photos, expandingNodes, searchQuery,
       presenceMap, zoomLevel, selectedUser, showFilters,
-      filterMembers, filterGuests, isDragging,
+      filterEmployeeTypes, isDragging,
       focusedUser, ancestorChain, allUsers, showSearchResults,
       personCardManagerChain, chartLayout, findMeError,
-      filterDepartments, showDeptFilter, showStats, showLayoutPicker,
+      filterDepartments, showDeptFilter, filterCountries, showCountryFilter,
+      showStats, showLayoutPicker,
       rootPickerQuery, rootPickerResults, runtimeRootUser,
     } = this.state;
-    const { showDepartment, theme, currentUserEmail, compactCards,
-      enableFindMe, enableLayoutToggle, enableStats, enableDeptFilter, enableUserFilter } = this.props;
+    const { showDepartment, theme, currentUserEmail, compactCards, countryColors,
+      enableFindMe, enableLayoutToggle, enableStats, enableDeptFilter,
+      enableCountryFilter, enableUserFilter } = this.props;
 
     if (isLoading) return (
       <div className={styles.centered}><Spinner size={SpinnerSize.large} label="Building org chart..." /></div>
@@ -1806,15 +1869,21 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
     // Full-tree scans are cached by reference — renders fire on every pan/zoom
     // state change, and the tree only changes when rootNode is replaced
     if (this._treeScanFor !== rootNode) {
-      this._treeScanFor = rootNode;
-      this._treeCounts  = countTreeUsers(rootNode);
-      this._uniqueDepts = getUniqueDepts(rootNode);
+      this._treeScanFor         = rootNode;
+      this._uniqueDepts         = getUniqueValues(rootNode, selectDepartment);
+      this._uniqueCountries     = getUniqueValues(rootNode, selectCountry);
+      this._uniqueEmployeeTypes = getUniqueValues(rootNode, selectEmployeeType);
     }
-    const treeCounts   = this._treeCounts;
-    const uniqueDepts  = this._uniqueDepts;
+    const uniqueDepts         = this._uniqueDepts;
+    const uniqueCountries     = this._uniqueCountries;
+    const uniqueEmployeeTypes = this._uniqueEmployeeTypes;
     const lowerQ       = searchQuery.trim().toLowerCase();
     const matchCount   = lowerQ ? countSearchMatches(rootNode, lowerQ, isVisible) : 0;
-    const activeFilters = (!filterMembers ? 1 : 0) + (!filterGuests ? 1 : 0);
+    // Country and employee type are Graph-only fields — with no values in the tree there
+    // is nothing to filter on, so the buttons hide rather than opening an empty panel.
+    const hasCountries     = uniqueCountries.size > 0;
+    const hasEmployeeTypes = uniqueEmployeeTypes.size > 1 ||
+      (uniqueEmployeeTypes.size === 1 && !uniqueEmployeeTypes.has(EMPLOYEE_TYPE_UNSET));
     if (showStats && this._statsFor !== allUsers) {
       this._statsFor = allUsers;
       this._stats    = computeStats(allUsers);
@@ -1838,6 +1907,53 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
       chartLayout === 'horizontal' ? styles.layoutHorizontal : '',
       compactCards ? styles.compactMode : '',
     ].filter(Boolean).join(' ');
+
+    // The three facet filters are identical apart from their icon, values and state key.
+    // Opening one closes the others so popups can't overlap.
+    type FacetKey = 'dept' | 'country' | 'employeeType';
+    const openPopup = (key: FacetKey): void => {
+      this.setState(p => ({
+        showDeptFilter:    key === 'dept'         ? !p.showDeptFilter    : false,
+        showCountryFilter: key === 'country'      ? !p.showCountryFilter : false,
+        showFilters:       key === 'employeeType' ? !p.showFilters       : false,
+      }));
+    };
+    const setFacet = (key: FacetKey, next: Set<string>): void => {
+      if (key === 'dept')    this.setState({ filterDepartments: next });
+      if (key === 'country') this.setState({ filterCountries: next });
+      if (key === 'employeeType') this.setState({ filterEmployeeTypes: next });
+    };
+    const renderFacetFilter = (
+      key: FacetKey, icon: string, title: string,
+      values: Map<string, number>, selected: Set<string>, isOpen: boolean,
+      swatchColor?: (v: string) => string
+    ): React.ReactElement => (
+      <div className={styles.toolbarPopupAnchor}>
+        <button
+          className={`${styles.iconToolBtn} ${selected.size > 0 ? styles.iconToolBtnActive : ''}`}
+          onClick={() => openPopup(key)}
+          title={title}
+        >
+          <Icon iconName={icon} />
+          {selected.size > 0 && <span className={styles.toolBtnBadge}>{selected.size}</span>}
+        </button>
+        {isOpen && (
+          <ValueFilterPanel
+            title={title}
+            values={values}
+            selected={selected}
+            minWidth={220}
+            swatchColor={swatchColor}
+            onToggle={value => {
+              const next = new Set(selected);
+              if (next.has(value)) next.delete(value); else next.add(value);
+              setFacet(key, next);
+            }}
+            onClear={() => setFacet(key, new Set())}
+          />
+        )}
+      </div>
+    );
 
     return (
       <div className={containerClasses}>
@@ -1910,7 +2026,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
             <div className={styles.toolbarPopupAnchor}>
               <button
                 className={`${styles.chartActionBtn} ${showLayoutPicker ? styles.iconToolBtnActive : ''}`}
-                onClick={() => this.setState(p => ({ showLayoutPicker: !p.showLayoutPicker, showFilters: false, showDeptFilter: false }))}
+                onClick={() => this.setState(p => ({ showLayoutPicker: !p.showLayoutPicker, showFilters: false, showDeptFilter: false, showCountryFilter: false }))}
                 title="Switch view layout"
               >
                 <Icon iconName="ViewAll" />
@@ -1961,70 +2077,22 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
           )}
 
           {/* Dept filter button */}
-          {enableDeptFilter && <div className={styles.toolbarPopupAnchor}>
-            <button
-              className={`${styles.iconToolBtn} ${filterDepartments.size > 0 ? styles.iconToolBtnActive : ''}`}
-              onClick={() => this.setState(p => ({ showDeptFilter: !p.showDeptFilter, showFilters: false }))}
-              title="Filter by department"
-            >
-              <Icon iconName="DeveloperTools" />
-              {filterDepartments.size > 0 && <span className={styles.toolBtnBadge}>{filterDepartments.size}</span>}
-            </button>
-            {showDeptFilter && (
-              <div className={styles.filterPanel} style={{ minWidth: 220 }}>
-                <div className={styles.filterPanelTitle}>Filter by department</div>
-                {Array.from(uniqueDepts.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([dept, count]) => (
-                  <label key={dept} className={styles.filterItem}>
-                    <input
-                      type="checkbox"
-                      className={styles.filterCheckbox}
-                      checked={filterDepartments.has(dept)}
-                      onChange={() => {
-                        const next = new Set(filterDepartments);
-                        next.has(dept) ? next.delete(dept) : next.add(dept);
-                        this.setState({ filterDepartments: next });
-                      }}
-                    />
-                    <span className={styles.filterLabel}>{dept}</span>
-                    <span className={styles.filterCount}>{count}</span>
-                  </label>
-                ))}
-                {filterDepartments.size > 0 && (
-                  <button
-                    className={styles.filterItem}
-                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#0078d4', fontWeight: 600, fontSize: 12 }}
-                    onClick={() => this.setState({ filterDepartments: new Set() })}
-                  >
-                    Clear all filters
-                  </button>
-                )}
-              </div>
-            )}
-          </div>}
+          {enableDeptFilter && renderFacetFilter(
+            'dept', 'DeveloperTools', 'Filter by department',
+            uniqueDepts, filterDepartments, showDeptFilter
+          )}
 
-          {/* Filter button */}
-          {enableUserFilter && (
-            <div className={styles.toolbarPopupAnchor}>
-              <button
-                className={`${styles.iconToolBtn} ${activeFilters > 0 ? styles.iconToolBtnActive : ''}`}
-                onClick={() => this.setState(p => ({ showFilters: !p.showFilters }))}
-                title="Filter user types"
-              >
-                <Icon iconName="Filter" />
-                {activeFilters > 0 && <span className={styles.toolBtnBadge}>{activeFilters}</span>}
-              </button>
-              {showFilters && (
-                <FilterPanel
-                  filterMembers={filterMembers}
-                  filterGuests={filterGuests}
-                  counts={treeCounts}
-                  onToggle={key => this.setState(p => ({
-                    filterMembers: key === 'members' ? !p.filterMembers : p.filterMembers,
-                    filterGuests:  key === 'guests'  ? !p.filterGuests  : p.filterGuests,
-                  }))}
-                />
-              )}
-            </div>
+          {/* Country filter button */}
+          {enableCountryFilter && hasCountries && renderFacetFilter(
+            'country', 'Globe', 'Filter by country',
+            uniqueCountries, filterCountries, showCountryFilter,
+            value => getCountryColor(value, countryColors)
+          )}
+
+          {/* Employee type filter button */}
+          {enableUserFilter && hasEmployeeTypes && renderFacetFilter(
+            'employeeType', 'Filter', 'Filter by employee type',
+            uniqueEmployeeTypes, filterEmployeeTypes, showFilters
           )}
 
           {/* Export PDF / CSV */}
@@ -2175,6 +2243,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
                 theme={theme}
                 isVisible={isVisible}
                 compactCards={compactCards}
+                countryColors={countryColors}
                 onToggle={this._handleToggle}
                 onCardClick={this._handleCardClick}
                 onFocus={this._handleFocusUser}
@@ -2184,10 +2253,10 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
         )}
 
         {/* ── Popups backdrop ── */}
-        {(showFilters || showDeptFilter || showLayoutPicker) && (
+        {(showFilters || showDeptFilter || showCountryFilter || showLayoutPicker) && (
           <div
             className={styles.popupBackdrop}
-            onClick={() => this.setState({ showFilters: false, showDeptFilter: false, showLayoutPicker: false })}
+            onClick={() => this.setState({ showFilters: false, showDeptFilter: false, showCountryFilter: false, showLayoutPicker: false })}
           />
         )}
 
@@ -2201,6 +2270,7 @@ export class OrgChart extends React.Component<IOrgChartProps, IOrgChartLocalStat
             managerChain={personCardManagerChain}
             dottedManager={this.state.personCardDottedManager}
             dottedReports={this.state.personCardDottedReports}
+            countryColors={countryColors}
             onClose={() => this.setState({
               selectedUser: null, personCardManagerChain: [],
               personCardDottedManager: null, personCardDottedReports: [],

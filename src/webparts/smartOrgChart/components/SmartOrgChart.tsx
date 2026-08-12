@@ -8,6 +8,7 @@ import { ISmartOrgChartProps, IUserSettings } from './ISmartOrgChartProps';
 import { EmployeeDirectory } from './EmployeeDirectory/EmployeeDirectory';
 import { OrgChart } from './OrgChart/OrgChart';
 import { SettingsPanel } from './SettingsPanel/SettingsPanel';
+import { parseCountryColors } from './countryUtils';
 import styles from './SmartOrgChart.module.scss';
 
 const VIEW_META = {
@@ -87,6 +88,11 @@ function readCurrentView(fallback: 'directory' | 'orgchart', instanceId: string)
 export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOrgChartState> {
   private _instanceId: string;
 
+  // Parsed country colour map, re-derived only when the raw property changes. Both child
+  // views take the Map, so parsing once here keeps it out of their render paths.
+  private _countryColorsRaw = '';
+  private _countryColors: Map<string, string> = new Map();
+
   constructor(props: ISmartOrgChartProps) {
     super(props);
     this._instanceId   = props.context?.instanceId || '';
@@ -104,6 +110,15 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
 
   public async componentDidMount(): Promise<void> {
     await this._initGraphService();
+  }
+
+  private _getCountryColors(): Map<string, string> {
+    const raw = this.props.countryColors || '';
+    if (raw !== this._countryColorsRaw) {
+      this._countryColorsRaw = raw;
+      this._countryColors    = parseCountryColors(raw);
+    }
+    return this._countryColors;
   }
 
   public async componentDidUpdate(prev: ISmartOrgChartProps): Promise<void> {
@@ -282,6 +297,7 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
               showOffice={userSettings.showOffice}
               pageSize={this.props.pageSize}
               theme={theme}
+              countryColors={this._getCountryColors()}
             />
           )}
 
@@ -303,7 +319,9 @@ export class SmartOrgChart extends React.Component<ISmartOrgChartProps, ISmartOr
               enableLayoutToggle={this.props.enableLayoutToggle !== false}
               enableStats={this.props.enableStats !== false}
               enableDeptFilter={this.props.enableDeptFilter !== false}
+              enableCountryFilter={this.props.enableCountryFilter !== false}
               enableUserFilter={this.props.enableUserFilter !== false}
+              countryColors={this._getCountryColors()}
               defaultZoom={this.props.defaultZoom ?? 0}
             />
           )}

@@ -14,7 +14,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  // Wider inset in a full-bleed section, where the page provides no horizontal padding
+  // of its own and content would otherwise sit flush against the browser edge.
+  padding: 0 24px;
   height: 52px;
   background: $ms-color-themePrimary;
   flex-shrink: 0;

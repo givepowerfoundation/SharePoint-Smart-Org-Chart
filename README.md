@@ -4,9 +4,22 @@
 
 A SharePoint Framework web part that gives any SharePoint Online page a searchable **Employee Directory** and an interactive **Org Chart**, both powered live from Microsoft Graph.
 
-![SPFx](https://img.shields.io/badge/SPFx-1.18.2-0078D4?logo=microsoft&logoColor=white) ![React](https://img.shields.io/badge/React-17.0.1-61DAFB?logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-4.7.4-3178C6?logo=typescript&logoColor=white) ![Fluent UI](https://img.shields.io/badge/Fluent%20UI-8.x-0078D4?logo=microsoft&logoColor=white)
+> This is the GivePower Foundation fork of [Sean Regan's Smart Org Chart](https://github.com/sregan1/SharePoint-Smart-Org-Chart), maintained for our own multi-country deployment. It adds country and employee-type filtering, full-width page support, and tracks a newer SPFx baseline. See the [changelog](CHANGELOG.md) for what differs.
+
+![SPFx](https://img.shields.io/badge/SPFx-1.21.1-0078D4?logo=microsoft&logoColor=white) ![React](https://img.shields.io/badge/React-17.0.1-61DAFB?logo=react&logoColor=black) ![TypeScript](https://img.shields.io/badge/TypeScript-5.3.3-3178C6?logo=typescript&logoColor=white) ![Fluent UI](https://img.shields.io/badge/Fluent%20UI-8.x-0078D4?logo=microsoft&logoColor=white)
 
 ![Smart Org Chart overview showing an interactive org chart tree spanning several levels of the organization](docs/screenshots/01-overview.png)
+
+---
+
+## What's New in 1.4.0
+
+- **Filter by country** — a country filter in the org chart toolbar and the directory, with a color-coded country pill on every card. Colors are configurable per country from the property pane.
+- **Employee type replaces the member/guest filter** — the org chart's funnel filter now works on the Azure AD `employeeType` attribute (Employee, Contractor, PTE, or whatever your tenant uses) instead of Entra account types, and appears as a second pill on each card.
+- **Full-width page support** — the web part can now be placed in a full-width section, giving the org chart the whole browser width.
+- **SPFx 1.21.1 / Node 22** — upgraded from SPFx 1.18.2, which was pinned to Node 18.
+
+Full detail, including an upgrade note about the member/guest filter change, is in the [changelog](CHANGELOG.md).
 
 ---
 
@@ -32,7 +45,8 @@ A SharePoint Framework web part that gives any SharePoint Online page a searchab
 | **Expand All** | Loads and expands the full organization from Microsoft Graph in one click |
 | **View from person** | Re-root the chart at any person without changing the admin configuration |
 | **Department filter** | Narrow the chart to one or more departments |
-| **User type filter** | Show or hide members and guest users independently |
+| **Country filter** | Narrow the chart to one or more countries, each with a color-coded swatch |
+| **Employee type filter** | Narrow the chart by the Azure AD `employeeType` value (e.g. Employee, Contractor, PTE) |
 | **Statistics panel** | Headcount, members, guests, and departments overlaid on the chart |
 | **Zoom** | 25%–150% with auto-fit on initial load |
 | **Export to PDF** | PDF button in the toolbar downloads the currently visible chart |
@@ -45,6 +59,7 @@ A SharePoint Framework web part that gives any SharePoint Online page a searchab
 | **Profile photos** | Loaded from Microsoft Graph with base64 caching; initials avatar as fallback |
 | **Presence badges** | Live availability from Microsoft Teams, refreshed every 60 seconds |
 | **Person profile card** | Full card with manager chain, action buttons (Chat, Email, Focus) |
+| **Country & employee type pills** | Color-coded country pill and an employee type pill on org chart cards, profile cards, and directory cards |
 
 ### Admin & Personalization
 
@@ -89,15 +104,25 @@ See the **[User Guide](USER-GUIDE.md)** for the full screenshot tour and feature
 
 > Without the Graph API permissions approved in step 4, the web part loads but cannot retrieve user data or presence status.
 
+### Placing it in a full-width column
+
+The org chart benefits from horizontal room, so the web part supports SharePoint's
+full-width section. To use it, edit the page, add a **Full-width column** section, then add
+Smart Org Chart to it.
+
+Two things to know: the full-width column section is not offered on every page template
+(it is generally available on Communication site pages), and the web part works normally in
+an ordinary section if you'd rather not use one.
+
 ---
 
 ## Prerequisites (for Development Only)
 
 | Requirement | Detail |
 |---|---|
-| **Node.js** | 18.x LTS — SPFx 1.18 is not compatible with Node 20+ |
+| **Node.js** | 22.x LTS — SPFx 1.21 requires Node 22 and does not run on Node 23+ |
 | **SharePoint** | Online (Microsoft 365) |
-| **SPFx** | 1.18.2 |
+| **SPFx** | 1.21.1 |
 | **Permissions to deploy** | Site Owner or above |
 
 ---
@@ -105,8 +130,8 @@ See the **[User Guide](USER-GUIDE.md)** for the full screenshot tour and feature
 ## Development Setup
 
 ```bash
-git clone https://github.com/sregan1/SharePoint-Smart-Org-Chart.git
-cd SharePointSmartOrgChart
+git clone https://github.com/givepowerfoundation/SharePoint-Smart-Org-Chart.git
+cd SharePoint-Smart-Org-Chart
 npm install
 ```
 
@@ -167,6 +192,16 @@ All settings below are configured in the web part property pane (edit the page �
 |---|---|---|
 | **App Title** | _(empty)_ | Text shown in the header bar alongside the current view name |
 | **Logo URL** | _(empty)_ | Full URL to a PNG/SVG/JPG logo (e.g. `https://contoso.sharepoint.com/sites/mysite/SiteAssets/logo.png`) |
+| **Country pill colors** | _(empty)_ | Optional color per country, one `Country=#hex` mapping per line. Country names must match the Azure AD `country` value exactly (case-insensitive). Unmapped countries get an automatic color derived from the name, so this is only needed where you want specific brand colors |
+
+Example country color mapping:
+
+```
+United States=#0b5fa5
+Kenya=#0b7d5a
+Haiti=#8a4b9c
+Colombia=#c2681a
+```
 
 ### Visual Style
 
@@ -213,7 +248,13 @@ Show or hide individual toolbar controls. All are visible by default.
 | **Layout toggle** | On |
 | **Org stats bar** | On |
 | **Department filter** | On |
-| **User type filter** | On |
+| **Country filter** | On |
+| **Employee type filter** | On |
+
+The country and employee type filters read the Azure AD `country` and `employeeType`
+attributes, which are only available on the **Graph API** data source. Each button hides
+itself automatically when no values are present, so nothing appears for tenants that
+don't populate these fields or for the SharePoint Search data source.
 
 ### Directory
 
@@ -284,6 +325,8 @@ SharePointSmartOrgChart/
 │       ├── SmartOrgChartWebPart.ts  # Web part entry + property pane
 │       └── components/
 │           ├── SmartOrgChart.tsx    # Root component — header, view switcher
+│           ├── countryUtils.ts      # Country pill colors, employee-type constants
+│           ├── personUtils.ts       # Initials, presence colors and labels
 │           ├── EmployeeDirectory/   # Directory view (grid, list, filters, export)
 │           ├── OrgChart/            # Chart view (all three layouts)
 │           └── SettingsPanel/       # User preferences panel
@@ -301,6 +344,7 @@ SharePointSmartOrgChart/
 | `@microsoft/sp-webpart-base` | SPFx web part base class and property pane |
 | `@fluentui/react` | Microsoft Fluent UI component library (8.x) |
 | `react` / `react-dom` | UI rendering (17.0.1) |
+| `typescript` | 5.3.3, via `@microsoft/rush-stack-compiler-5.3` (dev only) |
 | `puppeteer-core` | Headless browser for the demo screenshot tool (dev only) |
 
 ---
@@ -319,7 +363,7 @@ SharePointSmartOrgChart/
 
 **Photos not loading** — User photos require `User.Read.All` to be approved. Verify that profile photos are set in Microsoft 365 admin.
 
-**Build errors after `npm install`** — Ensure you are using Node.js 18. SPFx 1.18 is not compatible with Node 20+.
+**Build errors after `npm install`** — Ensure you are using Node.js 22. SPFx 1.21 refuses to build on Node 23+ and on anything below 18.17.1. If you see type errors mentioning duplicate or non-assignable SPFx types, run `npm dedupe`.
 
 ---
 
@@ -330,7 +374,7 @@ SharePointSmartOrgChart/
 - `User.Read.All` and `Presence.Read.All` are tenant-wide delegated permissions — a Global or SharePoint Administrator must approve them once for the whole tenant.
 - Presence status requires users to be licensed for Microsoft Teams.
 - User preferences (card size, font scale, etc.) are stored in browser `localStorage` and are not roamed across devices or browsers.
-- Node.js 18 LTS is required to build from source. SPFx 1.18 is not compatible with Node 20+.
+- Node.js 22 LTS is required to build from source. SPFx 1.21 is not compatible with Node 23+.
 
 ---
 

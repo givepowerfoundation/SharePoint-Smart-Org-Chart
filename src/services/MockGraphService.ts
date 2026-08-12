@@ -27,6 +27,26 @@ const PRESENCE_POOL: PresenceAvailability[] = [
 // [email, displayName, jobTitle, department, managerEmail|null, office, businessPhone, accountEnabled?, userType?]
 type RawUser = [string, string, string, string, string | null, string, string, boolean?, string?];
 
+// Demo country / employeeType assignment. Deterministic per email via hashCode, and
+// intentionally uncorrelated with officeLocation — the point is to give the country and
+// employee-type filters a realistic spread of values to exercise, not to model a real
+// office footprint. Weighted so one country and 'Employee' dominate, as in a real tenant.
+const DEMO_COUNTRY_POOL: string[] = [
+  'United States', 'United States', 'United States', 'United States', 'United States', // 50 %
+  'United Kingdom', 'United Kingdom',                                                  // 20 %
+  'Kenya',                                                                             // 10 %
+  'India',                                                                             // 10 %
+  'Germany',                                                                           // 10 %
+];
+
+// 'Not set' is represented by an empty slot so the filter's unset bucket has members.
+const DEMO_EMPLOYEE_TYPE_POOL: string[] = [
+  'Employee', 'Employee', 'Employee', 'Employee', 'Employee', 'Employee', // 60 %
+  'Contractor', 'Contractor',                                             // 20 %
+  'PTE',                                                                  // 10 %
+  '',                                                                     // 10 % — unset
+];
+
 // ── Name pools for generated users ────────────────────────────────────────────
 const FIRST_NAMES = [
   'Alex','Blake','Cameron','Dana','Elliott','Finley','Grace','Harper','Iris','Jordan',
@@ -536,6 +556,12 @@ export class MockGraphService extends GraphService {
     this._mockPresence    = new Map();
 
     for (const [email, displayName, jobTitle, department, , officeLocation, phone, accountEnabled, userType] of raw) {
+      const h = hashCode(email);
+      // Guests are external, so they read as contractors rather than drawing from the pool
+      const employeeType = userType === 'Guest'
+        ? 'Contractor'
+        : DEMO_EMPLOYEE_TYPE_POOL[h % DEMO_EMPLOYEE_TYPE_POOL.length];
+
       this._mockUsers.push({
         id:                email,
         displayName,
@@ -543,11 +569,13 @@ export class MockGraphService extends GraphService {
         jobTitle,
         department,
         officeLocation,
+        country:           DEMO_COUNTRY_POOL[h % DEMO_COUNTRY_POOL.length],
         mobilePhone:       '',
         businessPhones:    phone ? [phone] : [],
         userPrincipalName: email,
         accountEnabled:    accountEnabled !== false,
         userType:          userType || 'Member',
+        employeeType:      employeeType || undefined,
       });
     }
 

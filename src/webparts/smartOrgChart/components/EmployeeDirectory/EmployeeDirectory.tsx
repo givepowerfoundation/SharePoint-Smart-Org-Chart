@@ -7,6 +7,7 @@ import { IGraphUser, PresenceAvailability } from '../../../../services/GraphServ
 import { IEmployeeDirectoryProps } from './IEmployeeDirectoryProps';
 import { exportDirectoryToExcel } from '../../../../services/PdfExportService';
 import { PRESENCE_COLOR, getInitials } from '../personUtils';
+import { getCountryColor } from '../countryUtils';
 import styles from './EmployeeDirectory.module.scss';
 
 const ALPHABET = ['All', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
@@ -39,6 +40,8 @@ interface IEmployeeDirectoryState {
   viewMode: ViewMode;
   selectedDepartment: string;
   selectedOffice: string;
+  selectedCountry: string;
+  selectedEmployeeType: string;
 }
 
 export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, IEmployeeDirectoryState> {
@@ -56,7 +59,8 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
       selectedLetter: 'All', searchQuery: '',
       photos: {}, presenceMap: new Map(), currentPage: 1,
       viewMode: readViewMode(props.instanceId),
-      selectedDepartment: '', selectedOffice: ''
+      selectedDepartment: '', selectedOffice: '',
+      selectedCountry: '', selectedEmployeeType: ''
     };
   }
 
@@ -193,8 +197,25 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
     return [{ key: '', text: 'All Offices' }, ...offices.map(o => ({ key: o, text: o }))];
   }
 
+  private _getCountries(): IDropdownOption[] {
+    const seen: { [k: string]: boolean } = {};
+    const countries: string[] = [];
+    this.state.users.forEach(u => { if (u.country && !seen[u.country]) { seen[u.country] = true; countries.push(u.country); } });
+    countries.sort();
+    return [{ key: '', text: 'All Countries' }, ...countries.map(c => ({ key: c, text: c }))];
+  }
+
+  private _getEmployeeTypes(): IDropdownOption[] {
+    const seen: { [k: string]: boolean } = {};
+    const types: string[] = [];
+    this.state.users.forEach(u => { if (u.employeeType && !seen[u.employeeType]) { seen[u.employeeType] = true; types.push(u.employeeType); } });
+    types.sort();
+    return [{ key: '', text: 'All Employee Types' }, ...types.map(t => ({ key: t, text: t }))];
+  }
+
   private _getFilteredUsers(): IGraphUser[] {
-    const { users, selectedLetter, searchQuery, selectedDepartment, selectedOffice } = this.state;
+    const { users, selectedLetter, searchQuery, selectedDepartment, selectedOffice,
+            selectedCountry, selectedEmployeeType } = this.state;
     const { alphabetFilterField } = this.props;
     let result = users;
 
@@ -217,6 +238,8 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
 
     if (selectedDepartment) result = result.filter(u => u.department === selectedDepartment);
     if (selectedOffice) result = result.filter(u => u.officeLocation === selectedOffice);
+    if (selectedCountry) result = result.filter(u => u.country === selectedCountry);
+    if (selectedEmployeeType) result = result.filter(u => u.employeeType === selectedEmployeeType);
 
     return result;
   }
@@ -230,7 +253,10 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
   }
 
   private _clearFilters = (): void => {
-    this.setState({ selectedDepartment: '', selectedOffice: '', selectedLetter: 'All', searchQuery: '', currentPage: 1 });
+    this.setState({
+      selectedDepartment: '', selectedOffice: '', selectedCountry: '', selectedEmployeeType: '',
+      selectedLetter: 'All', searchQuery: '', currentPage: 1
+    });
   }
 
   private _setViewMode = (mode: ViewMode): void => {
@@ -239,6 +265,31 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
   }
 
   /* ── Render helpers ── */
+
+  // Country and employee-type pills, shared by the card grid and the list view.
+  // The country pill is tinted from its configured colour; employee type stays neutral.
+  private _renderFacetBadges(user: IGraphUser): React.ReactElement | null {
+    if (!user.country && !user.employeeType) return null;
+    const countryColor = user.country ? getCountryColor(user.country, this.props.countryColors) : '';
+    return (
+      <>
+        {user.country && (
+          <span
+            className={`${styles.statusBadge} ${styles.statusCountry}`}
+            style={{ background: `${countryColor}1a`, color: countryColor }}
+            title={user.country}
+          >
+            {user.country}
+          </span>
+        )}
+        {user.employeeType && (
+          <span className={`${styles.statusBadge} ${styles.statusEmployeeType}`}>
+            {user.employeeType}
+          </span>
+        )}
+      </>
+    );
+  }
 
   private _renderCardGrid(paged: IGraphUser[]): React.ReactElement {
     const { cardSize, showEmail, showPhone, showDepartment, showOffice } = this.props;
@@ -273,6 +324,7 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
                   <div className={styles.userName}>{user.displayName}</div>
                   {user.jobTitle && <div className={styles.jobTitle}>{user.jobTitle}</div>}
                   <div className={styles.statusBadges}>
+                    {this._renderFacetBadges(user)}
                     {user.accountEnabled === false && (
                       <span className={`${styles.statusBadge} ${styles.statusDisabled}`}>Disabled</span>
                     )}
@@ -365,6 +417,7 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
                       })()}
                     </div>
                     <span className={styles.listName}>{user.displayName}</span>
+                    {this._renderFacetBadges(user)}
                     {user.accountEnabled === false && (
                       <span className={`${styles.statusBadge} ${styles.statusDisabled}`}>Disabled</span>
                     )}
@@ -411,7 +464,8 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
 
   public render(): React.ReactElement {
     const { isLoading, error, selectedLetter, currentPage, searchQuery,
-            viewMode, selectedDepartment, selectedOffice } = this.state;
+            viewMode, selectedDepartment, selectedOffice,
+            selectedCountry, selectedEmployeeType } = this.state;
     const { pageSize } = this.props;
 
     if (isLoading) return (
@@ -424,12 +478,15 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
 
     const deptOptions = this._getDepartments();
     const officeOptions = this._getOffices();
+    const countryOptions = this._getCountries();
+    const employeeTypeOptions = this._getEmployeeTypes();
     const filtered = this._getFilteredUsers();
     const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
     const safePage = Math.min(currentPage, totalPages);
     const paged = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-    const activeFilters = (selectedDepartment ? 1 : 0) + (selectedOffice ? 1 : 0);
+    const activeFilters = (selectedDepartment ? 1 : 0) + (selectedOffice ? 1 : 0) +
+                          (selectedCountry ? 1 : 0) + (selectedEmployeeType ? 1 : 0);
 
     const THEME_CLASS: Partial<Record<string, string>> = {
       minimal: styles.themeMinimal,
@@ -467,6 +524,26 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
               selectedKey={selectedOffice}
               options={officeOptions}
               onChange={(_, o) => o && this.setState({ selectedOffice: o.key as string, currentPage: 1 })}
+              className={styles.filterDropdown}
+            />
+          )}
+
+          {countryOptions.length > 2 && (
+            <Dropdown
+              placeholder="Country"
+              selectedKey={selectedCountry}
+              options={countryOptions}
+              onChange={(_, o) => o && this.setState({ selectedCountry: o.key as string, currentPage: 1 })}
+              className={styles.filterDropdown}
+            />
+          )}
+
+          {employeeTypeOptions.length > 2 && (
+            <Dropdown
+              placeholder="Employee Type"
+              selectedKey={selectedEmployeeType}
+              options={employeeTypeOptions}
+              onChange={(_, o) => o && this.setState({ selectedEmployeeType: o.key as string, currentPage: 1 })}
               className={styles.filterDropdown}
             />
           )}

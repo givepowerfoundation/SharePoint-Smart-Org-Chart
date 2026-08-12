@@ -36,9 +36,14 @@ export interface ISmartOrgChartWebPartProps {
   enableLayoutToggle: boolean;
   enableStats: boolean;
   enableDeptFilter: boolean;
+  enableCountryFilter: boolean;
+  // Employee-type filter. Property key kept as enableUserFilter so already-deployed
+  // instances keep their setting after upgrade.
   enableUserFilter: boolean;
   defaultZoom: number;
   defaultFontScale: number;
+  // Country pill colours — one 'Country=#hex' mapping per line
+  countryColors: string;
   // Data
   dataSource: 'auto' | 'graph' | 'search';
   dottedLineAttribute: string;
@@ -58,8 +63,9 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
     if (p.enableFindMe       === undefined) p.enableFindMe       = true;
     if (p.enableLayoutToggle === undefined) p.enableLayoutToggle = true;
     if (p.enableStats        === undefined) p.enableStats        = true;
-    if (p.enableDeptFilter   === undefined) p.enableDeptFilter   = true;
-    if (p.enableUserFilter   === undefined) p.enableUserFilter   = true;
+    if (p.enableDeptFilter    === undefined) p.enableDeptFilter    = true;
+    if (p.enableCountryFilter === undefined) p.enableCountryFilter = true;
+    if (p.enableUserFilter    === undefined) p.enableUserFilter    = true;
     // Visual style defaults
     if (p.theme         === undefined) p.theme         = 'modern';
     if (p.defaultLayout === undefined) p.defaultLayout = 'drill';
@@ -68,6 +74,7 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
     // Branding defaults
     if (p.companyName === undefined) p.companyName = '';
     if (p.logoUrl     === undefined) p.logoUrl     = '';
+    if (p.countryColors === undefined) p.countryColors = '';
     // Data source default
     if (p.dataSource  === undefined) p.dataSource  = 'auto';
     if (p.dottedLineAttribute === undefined) p.dottedLineAttribute = '';
@@ -110,7 +117,9 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
       enableLayoutToggle: this.properties.enableLayoutToggle !== false,
       enableStats: this.properties.enableStats !== false,
       enableDeptFilter: this.properties.enableDeptFilter !== false,
+      enableCountryFilter: this.properties.enableCountryFilter !== false,
       enableUserFilter: this.properties.enableUserFilter !== false,
+      countryColors: this.properties.countryColors || '',
       dataSource: this.properties.dataSource || 'auto',
       dottedLineAttribute: this.properties.dottedLineAttribute || '',
       excludedAccounts:       this.properties.excludedAccounts       || '',
@@ -162,6 +171,13 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
                   label: 'Logo URL',
                   placeholder: 'https://contoso.sharepoint.com/sites/yoursite/SiteAssets/logo.png',
                   description: 'Full URL to a PNG/SVG/JPG image. Tip: open the image file in your browser and copy the address bar URL. "Copy link" sharing URLs will not work.'
+                }),
+                PropertyPaneTextField('countryColors', {
+                  label: 'Country pill colors',
+                  multiline: true,
+                  rows: 6,
+                  placeholder: 'United States=#0b5fa5\nKenya=#0b7d5a',
+                  description: 'Optional. One mapping per line, Country=#hex. Country names must match the Azure AD "country" value. Unmapped countries get an automatic color.'
                 }),
               ]
             },
@@ -329,10 +345,18 @@ export default class SmartOrgChartWebPart extends BaseClientSideWebPart<ISmartOr
                   onText: 'Visible',
                   offText: 'Hidden'
                 }),
-                PropertyPaneToggle('enableUserFilter', {
-                  label: 'User type filter (members / guests)',
+                PropertyPaneToggle('enableCountryFilter', {
+                  label: 'Country filter',
                   onText: 'Visible',
                   offText: 'Hidden'
+                }),
+                PropertyPaneToggle('enableUserFilter', {
+                  label: 'Employee type filter',
+                  onText: 'Visible',
+                  offText: 'Hidden'
+                }),
+                PropertyPaneLabel('enableUserFilter', {
+                  text: 'Country and employee type come from the Azure AD "country" and "employeeType" attributes and require the Graph API data source. Both filters hide themselves automatically when no values are found.'
                 })
               ]
             },

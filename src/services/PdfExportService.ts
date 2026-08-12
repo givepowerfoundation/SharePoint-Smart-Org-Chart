@@ -67,6 +67,10 @@ export function exportDirectoryToExcel(users: IGraphUser[], opts: IDirectoryExpo
     { label: 'Job Title', get: u => u.jobTitle || '' },
   ];
   if (opts.showDepartment) cols.push({ label: 'Department', get: u => u.department || '' });
+  // Country and employee type are always exported when present — unlike the columns
+  // above they have no per-user visibility setting to gate them.
+  if (users.some(u => u.country))      cols.push({ label: 'Country',       get: u => u.country || '' });
+  if (users.some(u => u.employeeType)) cols.push({ label: 'Employee Type', get: u => u.employeeType || '' });
   if (opts.showOffice)     cols.push({ label: 'Office',     get: u => u.officeLocation || '' });
   if (opts.showEmail)      cols.push({ label: 'Email',      get: u => u.mail || '' });
   if (opts.showPhone)      cols.push({ label: 'Phone',      get: u => u.mobilePhone || (u.businessPhones && u.businessPhones[0]) || '' });
@@ -85,7 +89,7 @@ export function exportDirectoryToExcel(users: IGraphUser[], opts: IDirectoryExpo
 
 export function exportOrgChartToCsv(rootNode: IOrgNode): void {
   const rows: string[] = [
-    csvRow(['Name', 'Job Title', 'Department', 'Office', 'Email', 'Phone', 'Manager', 'Level']),
+    csvRow(['Name', 'Job Title', 'Department', 'Country', 'Employee Type', 'Office', 'Email', 'Phone', 'Manager', 'Level']),
   ];
   const visit = (n: IOrgNode, managerName: string, depth: number): void => {
     const u = n.user;
@@ -93,6 +97,8 @@ export function exportOrgChartToCsv(rootNode: IOrgNode): void {
       u.displayName || '',
       u.jobTitle || '',
       u.department || '',
+      u.country || '',
+      u.employeeType || '',
       u.officeLocation || '',
       u.mail || '',
       u.mobilePhone || (u.businessPhones && u.businessPhones[0]) || '',

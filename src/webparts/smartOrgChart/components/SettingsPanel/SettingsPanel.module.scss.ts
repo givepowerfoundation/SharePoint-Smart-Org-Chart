@@ -1,4 +1,4 @@
-/* tslint:disable */
+
 require("./SettingsPanel.module.css");
 const styles = {
   body: 'body_55da3675',
@@ -20,4 +20,3 @@ const styles = {
 };
 
 export default styles;
-/* tslint:enable */
