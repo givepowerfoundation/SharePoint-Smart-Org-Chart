@@ -2,7 +2,10 @@
   "@microsoft/generator-sharepoint": {
     "isCreatingSolution": true,
     "environment": "spo",
-    "version": "1.18.2",
+    "version": "1.21.1",
+    "sdkVersions": {
+      "@microsoft/teams-js": "2.24.0"
+    },
     "libraryName": "sharepoint-smart-org-chart",
     "libraryId": "7f3b5d8a-2c4e-4f9a-b1d6-8e3c7a2f5b9d",
     "packageManager": "npm",
