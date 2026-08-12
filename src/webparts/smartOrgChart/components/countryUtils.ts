@@ -60,8 +60,9 @@ function hslToHex(h: number, s: number, l: number): string {
 
 /**
  * Colour for a country pill: the admin-configured value when present, otherwise a
- * deterministic hue derived from the name. Saturation and lightness are fixed at values
- * that stay legible as pill text on the light tint background used by the card pills.
+ * deterministic hue derived from the name. The fallback is pinned to a high lightness
+ * because the pill is filled with this colour at full strength and captioned in black —
+ * a dark auto-colour would leave the label unreadable.
  * Returns a 6-digit hex string.
  */
 export function getCountryColor(country: string, colorMap: Map<string, string>): string {
@@ -71,5 +72,20 @@ export function getCountryColor(country: string, colorMap: Map<string, string>):
 
   let hash = 0;
   for (let i = 0; i < key.length; i++) hash = (Math.imul(31, hash) + key.charCodeAt(i)) | 0;
-  return hslToHex(Math.abs(hash) % 360, 0.55, 0.38);
+  return hslToHex(Math.abs(hash) % 360, 0.62, 0.72);
+}
+
+/** Country pills are filled with the country colour at full strength and labelled in
+ *  black, so a pale mapping like `Kenya=#FFFF99` stays readable. */
+export const COUNTRY_PILL_TEXT = '#1a1a1a';
+
+/**
+ * Inline style for a country pill. Shared by the org chart node card, the profile card
+ * and the directory so all three stay identical if the treatment changes again.
+ */
+export function getCountryPillStyle(
+  country: string,
+  colorMap: Map<string, string>
+): { background: string; color: string } {
+  return { background: getCountryColor(country, colorMap), color: COUNTRY_PILL_TEXT };
 }

@@ -267,7 +267,7 @@ Open the SharePoint property pane (**Edit** → click the web part → pencil ic
 |---|---|
 | **App Title** | Text shown in the header bar alongside the current view name (e.g. "Contoso"). |
 | **Logo URL** | Full URL to a PNG, SVG, or JPG logo file. Open the image in your browser and copy the address bar URL. SharePoint "Copy link" sharing URLs will not work. |
-| **Country pill colors** | Optional. Sets a specific color per country for the country pill on employee cards, one `Country=#hex` mapping per line (for example `Kenya=#0b7d5a`). Country names must match the value in Azure AD. Any country you don't list gets an automatic color, so this is only needed where you want a particular color. |
+| **Country pill colors** | Optional. Sets a specific color per country for the country pill on employee cards, one `Country=#hex` mapping per line (for example `Kenya=#ffe08a`). Country names must match the value in Azure AD. Any country you don't list gets an automatic color, so this is only needed where you want a particular color. The pill is filled with your color and labelled in black, so pick light or mid-tone colors — a very dark color makes the label hard to read. |
 
 ### Page placement
 

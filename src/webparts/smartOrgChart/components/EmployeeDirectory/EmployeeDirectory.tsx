@@ -7,7 +7,7 @@ import { IGraphUser, PresenceAvailability } from '../../../../services/GraphServ
 import { IEmployeeDirectoryProps } from './IEmployeeDirectoryProps';
 import { exportDirectoryToExcel } from '../../../../services/PdfExportService';
 import { PRESENCE_COLOR, getInitials } from '../personUtils';
-import { getCountryColor } from '../countryUtils';
+import { getCountryPillStyle } from '../countryUtils';
 import styles from './EmployeeDirectory.module.scss';
 
 const ALPHABET = ['All', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
@@ -270,13 +270,12 @@ export class EmployeeDirectory extends React.Component<IEmployeeDirectoryProps, 
   // The country pill is tinted from its configured colour; employee type stays neutral.
   private _renderFacetBadges(user: IGraphUser): React.ReactElement | null {
     if (!user.country && !user.employeeType) return null;
-    const countryColor = user.country ? getCountryColor(user.country, this.props.countryColors) : '';
     return (
       <>
         {user.country && (
           <span
             className={`${styles.statusBadge} ${styles.statusCountry}`}
-            style={{ background: `${countryColor}1a`, color: countryColor }}
+            style={getCountryPillStyle(user.country, this.props.countryColors)}
             title={user.country}
           >
             {user.country}

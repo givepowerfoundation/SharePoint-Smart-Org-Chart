@@ -408,8 +408,9 @@
 .nodeTitle { font-size: calc(var(--soc-font-scale, 1) * 11px); font-weight: 500; text-align: center; width: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
 .nodeDept  { margin-top: 7px; font-size: calc(var(--soc-font-scale, 1) * 10px); color: #5a6472; background: #f0f3f7; border-radius: 10px; padding: 2px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 4px); }
 
-/* Country + employee-type pills. Both sit on one wrapping row below the office line;
-   the country pill is tinted from its configured colour, the employee-type pill is neutral. */
+/* Country + employee-type pills. Both sit on one wrapping row between the job title and
+   the department; the country pill is filled with its configured colour, the
+   employee-type pill is neutral. */
 .nodePillRow {
   display: flex;
   flex-wrap: wrap;
@@ -429,6 +430,10 @@
   text-overflow: ellipsis;
   max-width: 100%;
 }
+
+/* The country pill is the one carrying colour, so it runs a step larger than its
+   neutral neighbour. Background and text colour are applied inline per country. */
+.nodePillCountry { font-size: calc(var(--soc-font-scale, 1) * 10.5px); }
 
 .nodePillNeutral { color: #5a6472; background: #f0f3f7; }
 
@@ -720,6 +725,10 @@
   padding: 3px 10px;
   line-height: 1.4;
 }
+
+/* Country badge sits a step larger than the department badge beside it, matching the
+   emphasis the filled country pill gets on the node card. */
+.personCardCountryBadge { font-size: 12px; }
 
 .personCardStatusBadge {
   font-size: 10px;
@@ -1345,19 +1354,25 @@
 .compactCard {
   width: 148px !important;
   min-width: 148px !important;
-  height: 183px !important;
+  // 183 -> 201 made room for the country pill. The .compactMode connector offset below
+  // is derived from this height, so the two move together.
+  height: 201px !important;
   padding: 10px 8px 12px !important;
 
   .photo, .initials { width: 52px !important; height: 52px !important; font-size: 15px !important; }
   .nodeName { font-size: 11.5px !important; margin-bottom: 2px !important; }
   .nodeTitle { font-size: 10px !important; }
   .nodeDept { font-size: 9px !important; padding: 1px 6px !important; margin-top: 5px !important; }
-  // Compact cards are height-locked at 183px with no room for another row
-  .nodePillRow { display: none !important; }
+
+  // Only the country pill survives in compact mode — both pills together wrap to a
+  // second row on a 148px card, which the fixed height has no room for.
+  .nodePillRow { margin-top: 4px !important; }
+  .nodePillCountry { font-size: 9.5px !important; padding: 1px 6px !important; }
+  .nodePillNeutral { display: none !important; }
 }
 
 /* Adjust connector drop for compact cards */
-.compactMode .nodeWrapper.hasChildren::after { top: 183px; }
+.compactMode .nodeWrapper.hasChildren::after { top: 201px; }
 
 /* ════════════════════════════════════════════
    STATS BAR

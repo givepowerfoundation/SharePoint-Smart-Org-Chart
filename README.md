@@ -194,13 +194,15 @@ All settings below are configured in the web part property pane (edit the page â
 | **Logo URL** | _(empty)_ | Full URL to a PNG/SVG/JPG logo (e.g. `https://contoso.sharepoint.com/sites/mysite/SiteAssets/logo.png`) |
 | **Country pill colors** | _(empty)_ | Optional color per country, one `Country=#hex` mapping per line. Country names must match the Azure AD `country` value exactly (case-insensitive). Unmapped countries get an automatic color derived from the name, so this is only needed where you want specific brand colors |
 
-Example country color mapping:
+The pill is filled with the color you give at full strength and labelled in black, so
+**light and mid-tone colors work best** â€” a very dark color leaves the label hard to
+read. Example mapping:
 
 ```
-United States=#0b5fa5
-Kenya=#0b7d5a
-Haiti=#8a4b9c
-Colombia=#c2681a
+United States=#9ec5e8
+Kenya=#ffe08a
+Haiti=#d8b4e2
+Colombia=#f5b77a
 ```
 
 ### Visual Style

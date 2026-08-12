@@ -274,7 +274,10 @@
 /* Country names are proper nouns and often long — keep their natural case rather than
    inheriting the uppercase treatment the status badges use. Colour is set inline from
    the configured country palette. */
+/* Filled with the country colour inline and labelled in black, so it drops the
+   uppercase treatment the status badges use and runs a step larger than them. */
 .statusCountry {
+  font-size: 11px;
   text-transform: none;
   letter-spacing: 0;
   max-width: 140px;

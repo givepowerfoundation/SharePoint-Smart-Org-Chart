@@ -4,6 +4,22 @@ All notable changes to Smart Org Chart are documented here.
 
 ---
 
+## [1.4.1] — 2026-08-12
+
+### Changed
+- **Country pills are now solid.** The pill is filled with the configured country color at full strength and labelled in black, instead of tinting the color to 10% and using it as the text color. Pale mappings such as `Kenya=#FFFF99` were unreadable under the old treatment — the text and its background were within ~1.05:1 contrast. Light and mid-tone colors now work best; very dark colors are the ones to avoid.
+- **Country pills run one step larger** than the neutral employee-type pill beside them, on org chart cards, person profile cards and directory cards.
+- **Org chart cards now show the pill row above the department**, directly under the job title, rather than below the office line.
+- **Automatic colors for unmapped countries are lighter** (HSL lightness 38% → 72%) so the black label reads on them too.
+
+### Fixed
+- **Country and employee-type pills were invisible in the org chart when Compact cards was enabled.** Compact cards are height-locked and the pill row was hidden outright. Compact cards are now 201px tall (was 183px) and show the country pill; the employee-type pill stays hidden there, since both together wrap to a second row on a 148px card.
+
+### Notes
+- **Re-check your `Country pill colors` mapping after upgrading.** No configuration changes are required and nothing breaks, but the colors are now used as pill fills rather than as text, so the ones that look best have inverted. Colors chosen to be readable as text under 1.4.0 — deep greens, navies — will render as dark pills with a black label. The example mapping in the README has been updated accordingly.
+
+---
+
 ## [1.4.0] — 2026-08-12
 
 ### Added

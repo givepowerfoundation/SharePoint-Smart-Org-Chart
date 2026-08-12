@@ -8,7 +8,7 @@ import { IGraphUser, IOrgNode, PresenceAvailability } from '../../../../services
 import { exportOrgChartToPdf, exportOrgChartToCsv } from '../../../../services/PdfExportService';
 import { IOrgChartProps, IOrgChartState } from './IOrgChartProps';
 import { PRESENCE_COLOR, PRESENCE_LABEL, getInitials } from '../personUtils';
-import { EMPLOYEE_TYPE_UNSET, getCountryColor } from '../countryUtils';
+import { EMPLOYEE_TYPE_UNSET, getCountryColor, getCountryPillStyle } from '../countryUtils';
 import styles from './OrgChart.module.scss';
 
 /* ── Tree mutation helpers ───────────────── */
@@ -264,14 +264,14 @@ const PersonCard: React.FC<IPersonCardProps> = ({
                 {user.department}
               </span>
             )}
-            {user.country && (() => {
-              const countryColor = getCountryColor(user.country, countryColors);
-              return (
-                <span className={styles.personCardDeptBadge} style={{ background: `${countryColor}1a`, color: countryColor }}>
-                  {user.country}
-                </span>
-              );
-            })()}
+            {user.country && (
+              <span
+                className={`${styles.personCardDeptBadge} ${styles.personCardCountryBadge}`}
+                style={getCountryPillStyle(user.country, countryColors)}
+              >
+                {user.country}
+              </span>
+            )}
             {user.employeeType && (
               <span className={styles.personCardStatusBadge} style={{ background: '#f0f3f7', color: '#5a6472' }}>
                 {user.employeeType}
@@ -538,6 +538,24 @@ const OrgNodeCard: React.FC<IOrgNodeCardProps> = ({
           {user.jobTitle}
         </div>
       )}
+      {(user.country || user.employeeType) && !isGuest && !isDisabled && (
+        <div className={styles.nodePillRow}>
+          {user.country && (
+            <span
+              className={`${styles.nodePill} ${styles.nodePillCountry}`}
+              style={getCountryPillStyle(user.country, countryColors)}
+              title={user.country}
+            >
+              {user.country}
+            </span>
+          )}
+          {user.employeeType && (
+            <span className={`${styles.nodePill} ${styles.nodePillNeutral}`} title={user.employeeType}>
+              {user.employeeType}
+            </span>
+          )}
+        </div>
+      )}
       {showDepartment && user.department && !isGuest && !isDisabled && (
         <div className={styles.nodeDept}>{user.department}</div>
       )}
@@ -550,27 +568,6 @@ const OrgNodeCard: React.FC<IOrgNodeCardProps> = ({
       {!showDepartment && managerUser && !isGuest && !isDisabled && (
         <div className={styles.managerLine} style={{ color: isDark ? '#8090b0' : '#999' }}>
           ↑ {managerUser.displayName.split(' ')[0]}
-        </div>
-      )}
-      {(user.country || user.employeeType) && !isGuest && !isDisabled && (
-        <div className={styles.nodePillRow}>
-          {user.country && (() => {
-            const color = getCountryColor(user.country, countryColors);
-            return (
-              <span
-                className={styles.nodePill}
-                style={{ background: `${color}1a`, color }}
-                title={user.country}
-              >
-                {user.country}
-              </span>
-            );
-          })()}
-          {user.employeeType && (
-            <span className={`${styles.nodePill} ${styles.nodePillNeutral}`} title={user.employeeType}>
-              {user.employeeType}
-            </span>
-          )}
         </div>
       )}
       {(isGuest || isDisabled) && (
